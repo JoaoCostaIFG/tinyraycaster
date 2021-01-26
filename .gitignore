@@ -1,0 +1,5 @@
+.ccls-cache/*
+a.out
+out.ppm
+tinyraycaster
+zig-cache/
