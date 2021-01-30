@@ -117,6 +117,7 @@ pub fn main() !void {
 
     var player_x: f32 = 3.456;
     var player_y: f32 = 2.345;
+    var player_a: f32 = 1.523;
 
     // TODO I changed i with j (intended). DON'T FORGET IT
     // fill the screen with color gradients
@@ -153,6 +154,19 @@ pub fn main() !void {
     }
     // draw the player on the map
     draw_rectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(255, 255, 255));
+
+    // laser range finder
+    var t: f32 = 0;
+    while (t < 20) : (t += 0.05) {
+        const cx: f32 = player_x + t * cos(player_a);
+        const cy: f32 = player_y + t * sin(player_a);
+        if (map[int(cx) + int(cy) * map_w] != ' ') // hit obstacle
+            break;
+
+        const pix_x: usize = cx * rect_w;
+        const pix_y: usize = cy * rect_h;
+        framebuffer[pix_y * win_w + pix_x] = pack_color(255, 255, 255);
+    }
 
     drop_ppm_image("./out.ppm", &framebuffer, win_w, win_h);
 }
