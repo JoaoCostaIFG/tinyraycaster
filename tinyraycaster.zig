@@ -29,8 +29,13 @@ fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usiz
         return;
     }
     // show file as ppm
-    // TODO actually write w and h instead of hardcode
     _ = c.fwrite("P6\n512 512\n255\n", @sizeOf(u8), 15, f.?);
+    var n: usize = w;
+    print("{} ", .{n});
+    while (n > 0) : (n /= 10) {
+        print("{} ", .{n % 10});
+    }
+    print("\n");
 
     // this doesn't work because the file doesn't use alpha (would need u24 => weird)
     // var k = @ptrCast([*]const u8, image);
