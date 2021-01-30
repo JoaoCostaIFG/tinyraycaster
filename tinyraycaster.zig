@@ -3,6 +3,10 @@ const c = std.c; // for file output
 const assert = std.debug.assert;
 const print = std.debug.print;
 
+pub extern "c" fn rand() c_int;
+pub extern "c" fn fprintf(noalias stream: *c.FILE, noalias __format: [*]const u8, ...) c_int;
+pub extern "c" fn sprintf(noalias __s: [*]u8, noalias __format: [*]const u8, ...) c_int;
+
 const map_data = @embedFile("map");
 
 // TODO why bother with alpha ?
@@ -21,29 +25,6 @@ inline fn unpack_color(color: u32, r: *u8, g: *u8, b: *u8, a: *u8) void {
     a.* = @intCast(u8, (color >> 24) & 255);
 }
 
-fn itoa(val: usize) [32]u8 {
-    var int: usize = val;
-    var i: usize = 0;
-    var ret = [_]u8{0} ** 32;
-    // separate number, char by char
-    while (int > 0) : ({
-        int /= 10;
-        i += 1;
-    }) {
-        ret[i] = @intCast(u8, (int % 10) + 48);
-    }
-
-    // invert the resulting chars
-    var j: usize = 0;
-    while (j < i / 2) : (j += 1) {
-        const tmp: u8 = ret[j];
-        ret[j] = ret[i - j - 1];
-        ret[i - j - 1] = tmp;
-    }
-
-    return ret;
-}
-
 fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usize) void {
     assert(image.len == w * h);
 
@@ -54,17 +35,7 @@ fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usiz
         return;
     }
     // show file as ppm
-    _ = c.fwrite("P6\n", @sizeOf(u8), 3, f.?);
-    const w_str = itoa(w);
-    var w_str_len: usize = 0;
-    while (w_str[w_str_len] != 0) : (w_str_len += 1) {}
-    _ = c.fwrite(&w_str, @sizeOf(u8), w_str_len, f.?);
-    _ = c.fwrite(" ", @sizeOf(u8), 1, f.?);
-    const h_str = itoa(h);
-    var h_str_len: usize = 0;
-    while (h_str[h_str_len] != 0) : (h_str_len += 1) {}
-    _ = c.fwrite(&h_str, @sizeOf(u8), h_str_len, f.?);
-    _ = c.fwrite(" 255\n", @sizeOf(u8), 5, f.?);
+    _ = fprintf(f.?, "P6\n%d %d\n255\n", w, h);
 
     // this doesn't work because the file doesn't use alpha (would need u24 => weird)
     // var k = @ptrCast([*]const u8, image);
@@ -88,7 +59,7 @@ fn draw_rectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w:
         while (j < w) : (j += 1) {
             const cx: usize = x + j;
             const cy: usize = y + i;
-            // no need to check negative values
+            // no need to check for negative values (unsigned vars)
             if (cx >= img_w or cy >= img_h)
                 continue;
             img[cx + cy * img_w] = color;
@@ -126,54 +97,87 @@ pub fn main() !void {
     var map_w: usize = 0;
     var map_h: usize = 0;
     const map = readMap(&map_w, &map_h);
-
+    // player options
     var player_x: f32 = 3.456; // player x
     var player_y: f32 = 2.345; // player y
     var player_a: f32 = 1.523; // player view direction
     const fov: f32 = std.math.pi / 3.0; // field of view
 
+    // colors
+    const ncolors: usize = 10;
+    var colors = init: {
+        var initial_value: [ncolors]u32 = undefined;
+        for (initial_value) |*color| {
+            color.* = packColor(@intCast(u32, rand()) % 255, @intCast(u32, rand()) % 255, @intCast(u32, rand()) % 255);
+        }
+        break :init initial_value;
+    };
+
+    var filename: [13:0]u8 = undefined;
+
     // draw map
     const rect_w: usize = win_w / (map_w * 2);
     const rect_h: usize = win_h / map_h;
-    {
-        var i: usize = 0;
-        while (i < map_h) : (i += 1) {
-            var j: usize = 0;
-            while (j < map_w) : (j += 1) {
-                if (map[i * map_w + j] == ' ') continue; // skip empty spaces
-                const rect_x: usize = j * rect_w;
-                const rect_y: usize = i * rect_h;
-                draw_rectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, packColor(0, 255, 255));
+    const framenum: usize = 360;
+    var frame: usize = 0;
+    while (frame < framenum) : (frame += 1) {
+        _ = sprintf(@ptrCast([*]u8, &filename), "out%.5d.ppm", frame);
+        player_a += 2 * std.math.pi / @intToFloat(f32, framenum);
+
+        // clear the screen
+        framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
+
+        // draw the map
+        {
+            var i: usize = 0;
+            while (i < map_h) : (i += 1) {
+                var j: usize = 0;
+                while (j < map_w) : (j += 1) {
+                    if (map[i * map_w + j] == ' ') continue; // skip empty spaces
+                    const rect_x: usize = j * rect_w;
+                    const rect_y: usize = i * rect_h;
+                    const icolor: u32 = map[i * map_w + j] - '0';
+                    assert(icolor < ncolors);
+                    draw_rectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
+                }
             }
         }
-    }
-    // draw the player on the map
-    draw_rectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(255, 255, 255));
 
-    var i: usize = 0;
-    while (i < win_w / 2) : (i += 1) { // draw the visibility cone
-        const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
+        // draw the player on the map
+        draw_rectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
 
-        // laser range finder
-        var t: f32 = 0;
-        while (t < 20) : (t += 0.05) {
-            const cx: f32 = player_x + t * @cos(angle);
-            const cy: f32 = player_y + t * @sin(angle);
+        // draw the visibility cone AND the "3D" view
+        {
+            var i: usize = 0;
+            while (i < win_w / 2) : (i += 1) { // draw the visibility cone
+                const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
 
-            const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
-            const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
-            // this draws the visibility cone
-            framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
+                // laser range finder
+                var t: f32 = 0;
+                while (t < 20) : (t += 0.01) {
+                    const cx: f32 = player_x + t * @cos(angle);
+                    const cy: f32 = player_y + t * @sin(angle);
 
-            // our ray touches a wall, so draw the vertical column to create an
-            // illusion of 3D
-            if (map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w] != ' ') { // hit obstacle
-                const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / t);
-                draw_rectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, packColor(41, 47, 54));
-                break;
+                    const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
+                    const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
+                    // this draws the visibility cone
+                    framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
+
+                    // our ray touches a wall, so draw the vertical column to create an
+                    // illusion of 3D
+                    const mape: u32 = map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w];
+                    if (mape != ' ') { // hit obstacle
+                        const icolor = mape - '0';
+                        assert(icolor < ncolors);
+                        const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / t);
+                        draw_rectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, colors[icolor]);
+                        break;
+                    }
+                }
             }
         }
-    }
 
-    drop_ppm_image("./out.ppm", &framebuffer, win_w, win_h);
+        // draw frame
+        drop_ppm_image(&filename, &framebuffer, win_w, win_h);
+    }
 }
