@@ -118,6 +118,7 @@ pub fn main() !void {
     var player_x: f32 = 3.456;
     var player_y: f32 = 2.345;
     var player_a: f32 = 1.523;
+    const fov: f32 = std.math.pi / 3.0;
 
     // TODO I changed i with j (intended). DON'T FORGET IT
     // fill the screen with color gradients
@@ -155,17 +156,22 @@ pub fn main() !void {
     // draw the player on the map
     draw_rectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(255, 255, 255));
 
-    // laser range finder
-    var t: f32 = 0;
-    while (t < 20) : (t += 0.05) {
-        const cx: f32 = player_x + t * cos(player_a);
-        const cy: f32 = player_y + t * sin(player_a);
-        if (map[int(cx) + int(cy) * map_w] != ' ') // hit obstacle
-            break;
+    var i: usize = 0;
+    while (i < win_w) : (i += 1) { // draw the visibility cone
+        const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w);
 
-        const pix_x: usize = cx * rect_w;
-        const pix_y: usize = cy * rect_h;
-        framebuffer[pix_y * win_w + pix_x] = pack_color(255, 255, 255);
+        // laser range finder
+        var t: f32 = 0;
+        while (t < 20) : (t += 0.05) {
+            const cx: f32 = player_x + t * @cos(angle);
+            const cy: f32 = player_y + t * @sin(angle);
+            if (map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w] != ' ') // hit obstacle
+                break;
+
+            const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
+            const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
+            framebuffer[pix_y * win_w + pix_x] = packColor(255, 255, 255);
+        }
     }
 
     drop_ppm_image("./out.ppm", &framebuffer, win_w, win_h);
