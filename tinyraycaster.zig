@@ -3,6 +3,8 @@ const c = std.c; // for file output
 const assert = std.debug.assert;
 const print = std.debug.print;
 
+const map_data = @embedFile("map");
+
 // TODO why bother with alpha ?
 inline fn packColor(r: u32, g: u32, b: u32) u32 {
     return (b << 16) + (g << 8) + r;
@@ -86,66 +88,58 @@ fn draw_rectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w:
         while (j < w) : (j += 1) {
             const cx: usize = x + j;
             const cy: usize = y + i;
-            assert(cx < img_w and cy < img_h);
+            // no need to check negative values
+            if (cx >= img_w or cy >= img_h)
+                continue;
             img[cx + cy * img_w] = color;
         }
     }
 }
 
+pub fn readMap(map_w: *usize, map_h: *usize) [map_data.len]u8 {
+    map_w.* = 0;
+    map_h.* = 0;
+
+    var map = [_]u8{0} ** map_data.len;
+    var i: usize = 0;
+    var j: usize = 0;
+    while (i < map_data.len) : (i += 1) {
+        if (map_data[i] != '\n') {
+            map[j] = map_data[i];
+            j += 1;
+            map_w.* += 1;
+        } else {
+            map_h.* += 1;
+        }
+    }
+
+    map_w.* /= map_h.*;
+    return map;
+}
+
 pub fn main() !void {
-    const win_w: usize = 512; // image width
+    const win_w: usize = 1024; // image width
     const win_h: usize = 512; // image height
     // the image itself, initialized to red
-    var framebuffer = [_]u32{255} ** (win_w * win_h);
+    var framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
+    // read map
+    var map_w: usize = 0;
+    var map_h: usize = 0;
+    const map = readMap(&map_w, &map_h);
 
-    // read + parse map
-    const map_w: usize = 16;
-    const map_h: usize = 16;
-    const map_data = @embedFile("map");
-    var line_num: usize = 0;
-    var map = [_]u8{0} ** map_data.len;
-    {
-        var i: usize = 0;
-        var j: usize = 0;
-        while (i < map_data.len) : (i += 1) {
-            if (map_data[i] != '\n') {
-                map[j] = map_data[i];
-                j += 1;
-            }
-        }
-    }
-
-    var player_x: f32 = 3.456;
-    var player_y: f32 = 2.345;
-    var player_a: f32 = 1.523;
-    const fov: f32 = std.math.pi / 3.0;
-
-    // TODO I changed i with j (intended). DON'T FORGET IT
-    // fill the screen with color gradients
-    {
-        @setFloatMode(@import("builtin").FloatMode.Optimized);
-        var i: usize = 0;
-        while (i < win_h) : (i += 1) {
-            var j: usize = 0;
-            while (j < win_w) : (j += 1) {
-                const r: u8 = @intCast(u8, 255 * i / win_h);
-                const g: u8 = @intCast(u8, 255 * j / win_w);
-                const b: u8 = 0; // (r + g) / 2.0;
-                framebuffer[i * win_w + j] = packColor(r, g, b);
-            }
-        }
-    }
+    var player_x: f32 = 3.456; // player x
+    var player_y: f32 = 2.345; // player y
+    var player_a: f32 = 1.523; // player view direction
+    const fov: f32 = std.math.pi / 3.0; // field of view
 
     // draw map
-    const rect_w: usize = win_w / map_w;
+    const rect_w: usize = win_w / (map_w * 2);
     const rect_h: usize = win_h / map_h;
     {
         var i: usize = 0;
         while (i < map_h) : (i += 1) {
             var j: usize = 0;
             while (j < map_w) : (j += 1) {
-                if (map[i * map_w + j] == 0)
-                    print("tchu tchan\n", .{});
                 if (map[i * map_w + j] == ' ') continue; // skip empty spaces
                 const rect_x: usize = j * rect_w;
                 const rect_y: usize = i * rect_h;
@@ -157,20 +151,27 @@ pub fn main() !void {
     draw_rectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(255, 255, 255));
 
     var i: usize = 0;
-    while (i < win_w) : (i += 1) { // draw the visibility cone
-        const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w);
+    while (i < win_w / 2) : (i += 1) { // draw the visibility cone
+        const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
 
         // laser range finder
         var t: f32 = 0;
         while (t < 20) : (t += 0.05) {
             const cx: f32 = player_x + t * @cos(angle);
             const cy: f32 = player_y + t * @sin(angle);
-            if (map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w] != ' ') // hit obstacle
-                break;
 
             const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
             const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
-            framebuffer[pix_y * win_w + pix_x] = packColor(255, 255, 255);
+            // this draws the visibility cone
+            framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
+
+            // our ray touches a wall, so draw the vertical column to create an
+            // illusion of 3D
+            if (map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w] != ' ') { // hit obstacle
+                const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / t);
+                draw_rectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, packColor(41, 47, 54));
+                break;
+            }
         }
     }
 
