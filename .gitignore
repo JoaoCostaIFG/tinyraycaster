@@ -1,6 +1,6 @@
 .ccls-cache/*
 a.out
-out.ppm
+*.ppm
 tinyraycaster
 zig-cache/
 test

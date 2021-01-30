@@ -18,14 +18,14 @@ inline fn packColor_a(r: u32, g: u32, b: u32, a: u32) u32 {
     return (a << 24) + (b << 16) + (g << 8) + r;
 }
 
-inline fn unpack_color(color: u32, r: *u8, g: *u8, b: *u8, a: *u8) void {
+inline fn unpackColor(color: u32, r: *u8, g: *u8, b: *u8, a: *u8) void {
     r.* = @intCast(u8, color & 255);
     g.* = @intCast(u8, (color >> 8) & 255);
     b.* = @intCast(u8, (color >> 16) & 255);
     a.* = @intCast(u8, (color >> 24) & 255);
 }
 
-fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usize) void {
+fn dropPpmImage(filename: [*:0]const u8, image: []const u32, w: usize, h: usize) void {
     assert(image.len == w * h);
 
     // open output file for NULL
@@ -44,14 +44,14 @@ fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usiz
     var i: usize = 0;
     var color: [4]u8 = undefined;
     while (i < w * h) : (i += 1) {
-        unpack_color(image[i], &color[0], &color[1], &color[2], &color[3]);
+        unpackColor(image[i], &color[0], &color[1], &color[2], &color[3]);
         _ = c.fwrite(&color, @sizeOf(u8), 3, f.?);
     }
 
     _ = c.fclose(f.?);
 }
 
-fn draw_rectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w: usize, h: usize, color: u32) void {
+fn drawRectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w: usize, h: usize, color: u32) void {
     assert(img.len == img_w * img_h);
     var i: usize = 0;
     while (i < h) : (i += 1) {
@@ -138,13 +138,13 @@ pub fn main() !void {
                     const rect_y: usize = i * rect_h;
                     const icolor: u32 = map[i * map_w + j] - '0';
                     assert(icolor < ncolors);
-                    draw_rectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
+                    drawRectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
                 }
             }
         }
 
         // draw the player on the map
-        draw_rectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
+        drawRectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
 
         // draw the visibility cone AND the "3D" view
         {
@@ -169,8 +169,8 @@ pub fn main() !void {
                     if (mape != ' ') { // hit obstacle
                         const icolor = mape - '0';
                         assert(icolor < ncolors);
-                        const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / t);
-                        draw_rectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, colors[icolor]);
+                        const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player_a)));
+                        drawRectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, colors[icolor]);
                         break;
                     }
                 }
@@ -178,6 +178,6 @@ pub fn main() !void {
         }
 
         // draw frame
-        drop_ppm_image(&filename, &framebuffer, win_w, win_h);
+        dropPpmImage(&filename, &framebuffer, win_w, win_h);
     }
 }
