@@ -19,6 +19,29 @@ inline fn unpack_color(color: u32, r: *u8, g: *u8, b: *u8, a: *u8) void {
     a.* = @intCast(u8, (color >> 24) & 255);
 }
 
+fn itoa(val: usize) [32]u8 {
+    var int: usize = val;
+    var i: usize = 0;
+    var ret = [_]u8{0} ** 32;
+    // separate number, char by char
+    while (int > 0) : ({
+        int /= 10;
+        i += 1;
+    }) {
+        ret[i] = @intCast(u8, (int % 10) + 48);
+    }
+
+    // invert the resulting chars
+    var j: usize = 0;
+    while (j < i / 2) : (j += 1) {
+        const tmp: u8 = ret[j];
+        ret[j] = ret[i - j - 1];
+        ret[i - j - 1] = tmp;
+    }
+
+    return ret;
+}
+
 fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usize) void {
     assert(image.len == w * h);
 
@@ -29,13 +52,17 @@ fn drop_ppm_image(filename: [*:0]const u8, image: []const u32, w: usize, h: usiz
         return;
     }
     // show file as ppm
-    _ = c.fwrite("P6\n512 512\n255\n", @sizeOf(u8), 15, f.?);
-    var n: usize = w;
-    print("{} ", .{n});
-    while (n > 0) : (n /= 10) {
-        print("{} ", .{n % 10});
-    }
-    print("\n");
+    _ = c.fwrite("P6\n", @sizeOf(u8), 3, f.?);
+    const w_str = itoa(w);
+    var w_str_len: usize = 0;
+    while (w_str[w_str_len] != 0) : (w_str_len += 1) {}
+    _ = c.fwrite(&w_str, @sizeOf(u8), w_str_len, f.?);
+    _ = c.fwrite(" ", @sizeOf(u8), 1, f.?);
+    const h_str = itoa(h);
+    var h_str_len: usize = 0;
+    while (h_str[h_str_len] != 0) : (h_str_len += 1) {}
+    _ = c.fwrite(&h_str, @sizeOf(u8), h_str_len, f.?);
+    _ = c.fwrite(" 255\n", @sizeOf(u8), 5, f.?);
 
     // this doesn't work because the file doesn't use alpha (would need u24 => weird)
     // var k = @ptrCast([*]const u8, image);
@@ -115,6 +142,8 @@ pub fn main() !void {
         while (i < map_h) : (i += 1) {
             var j: usize = 0;
             while (j < map_w) : (j += 1) {
+                if (map[i * map_w + j] == 0)
+                    print("tchu tchan\n", .{});
                 if (map[i * map_w + j] == ' ') continue; // skip empty spaces
                 const rect_x: usize = j * rect_w;
                 const rect_y: usize = i * rect_h;
