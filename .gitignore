@@ -2,6 +2,7 @@
 a.out
 *.ppm
 tinyraycaster
+tinyraycaster.o
 zig-cache/
 test
 test.zig

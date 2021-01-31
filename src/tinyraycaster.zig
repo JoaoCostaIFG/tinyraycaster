@@ -2,12 +2,16 @@ const std = @import("std");
 const c = std.c; // for file output
 const assert = std.debug.assert;
 const print = std.debug.print;
+// const stb = @cImport({
+// @cDefine("STB_IMAGE_IMPLEMENTATION", {});
+// @cInclude("stb_image.h");
+// });
 
 pub extern "c" fn rand() c_int;
 pub extern "c" fn fprintf(noalias stream: *c.FILE, noalias __format: [*]const u8, ...) c_int;
 pub extern "c" fn sprintf(noalias __s: [*]u8, noalias __format: [*]const u8, ...) c_int;
 
-const map_data = @embedFile("map");
+const map_data = @embedFile("../res/map");
 
 // TODO why bother with alpha ?
 inline fn packColor(r: u32, g: u32, b: u32) u32 {
@@ -88,7 +92,20 @@ pub fn readMap(map_w: *usize, map_h: *usize) [map_data.len]u8 {
     return map;
 }
 
+fn loadTexture(filename: [*:0]const u8) bool {
+    var nchannels: c_int = -1;
+    var w: c_int = undefined;
+    var h: c_int = undefined;
+
+    // _ = stb.stbi_load("tchu", &w, &h, &[_][]const u8{}&nchannels, 0);
+    // _ = stb.stbi_is_16_bit_from_file(null);
+
+    return true;
+}
+
 pub fn main() !void {
+    _ = loadTexture("../res/walltext.png");
+
     const win_w: usize = 1024; // image width
     const win_h: usize = 512; // image height
     // the image itself, initialized to red
@@ -118,7 +135,7 @@ pub fn main() !void {
     // draw map
     const rect_w: usize = win_w / (map_w * 2);
     const rect_h: usize = win_h / map_h;
-    const framenum: usize = 360;
+    const framenum: usize = 1;
     var frame: usize = 0;
     while (frame < framenum) : (frame += 1) {
         _ = sprintf(@ptrCast([*]u8, &filename), "out%.5d.ppm", frame);
