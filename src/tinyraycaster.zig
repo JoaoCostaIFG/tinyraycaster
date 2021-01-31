@@ -111,6 +111,7 @@ fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_c
         return false;
     }
 
+    // TODO we need to free this
     texture.* = std.heap.c_allocator.alloc(u32, @intCast(usize, h * w)) catch {
         log.err("loadTexture: texture memory allocation failed ({s}).", .{filename});
         return false;
@@ -125,6 +126,24 @@ fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_c
     }
 
     return true;
+}
+
+// TODO txcoord usize instead of isize?
+fn texture_column(img: *[]u32, texsize: usize, ntextures: usize, texid: usize, texcoord: usize, column_height: usize) *[]u32 {
+    const img_w: usize = texsize * ntextures;
+    const img_h: usize = texsize;
+    assert(texcoord < texsize and texid < ntextures);
+
+    // TODO we need to free this
+    var column = std.heap.c_allocator.alloc(u32, column_height) catch unreachable;
+
+    var y: usize = 0;
+    while (y < column_height) : (y += 1) {
+        const pix_x: usize = texid * texsize + texcoord;
+        const pix_y: usize = (y * texsize) / column_height;
+        column[y] = img.*[pix_x + pix_y * img_w];
+    }
+    return &column;
 }
 
 pub fn main() !void {
@@ -185,8 +204,8 @@ pub fn main() !void {
                 const cx: f32 = player_x + t * @cos(angle);
                 const cy: f32 = player_y + t * @sin(angle);
 
-                const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
-                const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
+                var pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
+                var pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
                 // this draws the visibility cone
                 framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
 
@@ -197,7 +216,29 @@ pub fn main() !void {
                     const texid = mape - '0';
                     assert(texid < walltex_cnt);
                     const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player_a)));
-                    drawRectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, walltex[texid * walltex_size]);
+
+                    const hitx: f32 = cx - @floor(cx + 0.5); // hitx and hity contain (signed) fractional parts of cx and cy,
+                    const hity: f32 = cy - @floor(cy + 0.5); // between [-0.5, 0.5], one is very close to 0
+                    var x_texcoord: isize = @floatToInt(isize, hitx * @intToFloat(f32, walltex_size));
+
+                    // we need to determine whether we hit a "vertical" or
+                    // a "horizontal" wall (w.r.t the map)
+                    if (@fabs(hity) > @fabs(hitx))
+                        x_texcoord = @floatToInt(isize, hity * @intToFloat(f32, walltex_size));
+                    if (x_texcoord < 0)
+                        x_texcoord += @intCast(isize, walltex_size); // do not forget x_texcoord can be negative, fix that
+
+                    // draw textured wall
+                    const column: *[]u32 = texture_column(&walltex, walltex_size, walltex_cnt, texid, @intCast(usize, x_texcoord), column_height);
+                    pix_x = win_w / 2 + i;
+                    var j: usize = 0;
+                    while (j < column_height) : (j += 1) {
+                        pix_y = j + win_h / 2 - column_height / 2;
+                        if (pix_y < 0 or pix_y >= win_h)
+                            continue;
+                        framebuffer[pix_y * win_w + pix_x] = column.*[j];
+                    }
+
                     break;
                 }
             }
