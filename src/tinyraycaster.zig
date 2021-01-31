@@ -1,7 +1,6 @@
 const std = @import("std");
-const c = std.c; // for file output
 const assert = std.debug.assert;
-const print = std.debug.print;
+const log = std.log;
 const fs = std.fs;
 // const stb = @cImport({
 // @cDefine("STB_IMAGE_IMPLEMENTATION", {});
@@ -9,8 +8,7 @@ const fs = std.fs;
 // });
 
 pub extern "c" fn rand() c_int;
-pub extern "c" fn fprintf(noalias stream: *c.FILE, noalias __format: [*]const u8, ...) c_int;
-pub extern "c" fn sprintf(noalias __s: [*]u8, noalias __format: [*]const u8, ...) c_int;
+// pub extern "c" fn sprintf(noalias __s: [*]u8, noalias __format: [*]const u8, ...) c_int;
 
 const map_data = @embedFile("../res/map");
 
@@ -30,32 +28,30 @@ inline fn unpackColor(color: u32, r: *u8, g: *u8, b: *u8, a: *u8) void {
     a.* = @intCast(u8, (color >> 24) & 255);
 }
 
-fn dropPpmImage(filename: [*:0]const u8, image: []const u32, w: usize, h: usize) void {
+fn dropPpmImage(filename: []const u8, image: []const u32, w: usize, h: usize) bool {
     assert(image.len == w * h);
 
-    // open output file for NULL
-    var f: ?*c.FILE = c.fopen(filename, "wb+");
-    if (f == null) {
-        print("Opening file {s} failed!\n", .{filename});
-        return;
-    }
-    // show file as ppm
-    _ = fprintf(f.?, "P6\n%d %d\n255\n", w, h);
+    // open file
+    const cwd: fs.Dir = fs.cwd();
+    const f: fs.File = cwd.createFile(filename, fs.File.CreateFlags{}) catch return false;
+    // create a buffered writer
+    var buf = std.io.bufferedWriter(f.writer());
+    var buf_writer = buf.writer();
 
-    // this doesn't work because the file doesn't use alpha (would need u24 => weird)
-    // var k = @ptrCast([*]const u8, image);
-    // _ = c.fwrite(k, @sizeOf(u32), w * h, f.?);
-
+    // ppm file type meta-data
+    buf_writer.print("P6\n{} {}\n255\n", .{ w, h }) catch return false;
+    // write file data
     var i: usize = 0;
     var color: [4]u8 = undefined;
     while (i < w * h) : (i += 1) {
         unpackColor(image[i], &color[0], &color[1], &color[2], &color[3]);
-        _ = c.fwrite(&color, @sizeOf(u8), 3, f.?);
+        _ = buf_writer.write(color[0..3]) catch false;
     }
 
-    _ = c.fclose(f.?);
+    buf.flush() catch return false;
+    f.close();
 
-    const cwd: fs.DIR = fs.cwd();
+    return true;
 }
 
 fn drawRectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w: usize, h: usize, color: u32) void {
@@ -133,71 +129,64 @@ pub fn main() !void {
         break :init initial_value;
     };
 
-    var filename: [13:0]u8 = undefined;
-
     // draw map
     const rect_w: usize = win_w / (map_w * 2);
     const rect_h: usize = win_h / map_h;
-    const framenum: usize = 1;
-    var frame: usize = 0;
-    while (frame < framenum) : (frame += 1) {
-        _ = sprintf(@ptrCast([*]u8, &filename), "out%.5d.ppm", frame);
-        player_a += 2 * std.math.pi / @intToFloat(f32, framenum);
 
-        // clear the screen
-        framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
+    // clear the screen
+    framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
 
-        // draw the map
-        {
-            var i: usize = 0;
-            while (i < map_h) : (i += 1) {
-                var j: usize = 0;
-                while (j < map_w) : (j += 1) {
-                    if (map[i * map_w + j] == ' ') continue; // skip empty spaces
-                    const rect_x: usize = j * rect_w;
-                    const rect_y: usize = i * rect_h;
-                    const icolor: u32 = map[i * map_w + j] - '0';
-                    assert(icolor < ncolors);
-                    drawRectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
-                }
+    // draw the map
+    {
+        var i: usize = 0;
+        while (i < map_h) : (i += 1) {
+            var j: usize = 0;
+            while (j < map_w) : (j += 1) {
+                if (map[i * map_w + j] == ' ') continue; // skip empty spaces
+                const rect_x: usize = j * rect_w;
+                const rect_y: usize = i * rect_h;
+                const icolor: u32 = map[i * map_w + j] - '0';
+                assert(icolor < ncolors);
+                drawRectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
             }
         }
-
-        // draw the player on the map
-        drawRectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
-
-        // draw the visibility cone AND the "3D" view
-        {
-            var i: usize = 0;
-            while (i < win_w / 2) : (i += 1) { // draw the visibility cone
-                const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
-
-                // laser range finder
-                var t: f32 = 0;
-                while (t < 20) : (t += 0.01) {
-                    const cx: f32 = player_x + t * @cos(angle);
-                    const cy: f32 = player_y + t * @sin(angle);
-
-                    const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
-                    const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
-                    // this draws the visibility cone
-                    framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
-
-                    // our ray touches a wall, so draw the vertical column to create an
-                    // illusion of 3D
-                    const mape: u32 = map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w];
-                    if (mape != ' ') { // hit obstacle
-                        const icolor = mape - '0';
-                        assert(icolor < ncolors);
-                        const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player_a)));
-                        drawRectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, colors[icolor]);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // draw frame
-        dropPpmImage(&filename, &framebuffer, win_w, win_h);
     }
+
+    // draw the player on the map
+    drawRectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
+
+    // draw the visibility cone AND the "3D" view
+    {
+        var i: usize = 0;
+        while (i < win_w / 2) : (i += 1) { // draw the visibility cone
+            const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
+
+            // laser range finder
+            var t: f32 = 0;
+            while (t < 20) : (t += 0.01) {
+                const cx: f32 = player_x + t * @cos(angle);
+                const cy: f32 = player_y + t * @sin(angle);
+
+                const pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
+                const pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
+                // this draws the visibility cone
+                framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
+
+                // our ray touches a wall, so draw the vertical column to create an
+                // illusion of 3D
+                const mape: u32 = map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w];
+                if (mape != ' ') { // hit obstacle
+                    const icolor = mape - '0';
+                    assert(icolor < ncolors);
+                    const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player_a)));
+                    drawRectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, colors[icolor]);
+                    break;
+                }
+            }
+        }
+    }
+
+    // output resulting image
+    if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
+        log.err("dropPpmImage: Saving the image to a file failed!", .{});
 }
