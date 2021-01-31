@@ -214,6 +214,18 @@ pub fn main() !void {
         }
     }
 
+    // draw the 4th texture on the screen
+    {
+        const texid: usize = 4;
+        var i: usize = 0;
+        while (i < walltex_size) : (i += 1) {
+            var j: usize = 0;
+            while (j < walltex_size) : (j += 1) {
+                framebuffer[i + j * win_w] = walltex[i + texid * walltex_size + j * walltex_size * walltex_cnt];
+            }
+        }
+    }
+
     // output resulting image
     if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
         log.err("dropPpmImage: Saving the image to a file failed!", .{});
