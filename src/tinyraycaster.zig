@@ -147,16 +147,6 @@ pub fn main() !void {
     var player_a: f32 = 1.523; // player view direction
     const fov: f32 = std.math.pi / 3.0; // field of view
 
-    // colors
-    const ncolors: usize = 10;
-    var colors = init: {
-        var initial_value: [ncolors]u32 = undefined;
-        for (initial_value) |*color| {
-            color.* = packColor(@intCast(u32, rand()) % 255, @intCast(u32, rand()) % 255, @intCast(u32, rand()) % 255);
-        }
-        break :init initial_value;
-    };
-
     // draw map
     const rect_w: usize = win_w / (map_w * 2);
     const rect_h: usize = win_h / map_h;
@@ -173,9 +163,9 @@ pub fn main() !void {
                 if (map[i * map_w + j] == ' ') continue; // skip empty spaces
                 const rect_x: usize = j * rect_w;
                 const rect_y: usize = i * rect_h;
-                const icolor: u32 = map[i * map_w + j] - '0';
-                assert(icolor < ncolors);
-                drawRectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, colors[icolor]);
+                const texid: u32 = map[i * map_w + j] - '0';
+                assert(texid < walltex_cnt);
+                drawRectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, walltex[texid * walltex_size]);
             }
         }
     }
@@ -204,24 +194,12 @@ pub fn main() !void {
                 // illusion of 3D
                 const mape: u32 = map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w];
                 if (mape != ' ') { // hit obstacle
-                    const icolor = mape - '0';
-                    assert(icolor < ncolors);
+                    const texid = mape - '0';
+                    assert(texid < walltex_cnt);
                     const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player_a)));
-                    drawRectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, colors[icolor]);
+                    drawRectangle(&framebuffer, win_w, win_h, win_w / 2 + i, win_h / 2 - column_height / 2, 1, column_height, walltex[texid * walltex_size]);
                     break;
                 }
-            }
-        }
-    }
-
-    // draw the 4th texture on the screen
-    {
-        const texid: usize = 4;
-        var i: usize = 0;
-        while (i < walltex_size) : (i += 1) {
-            var j: usize = 0;
-            while (j < walltex_size) : (j += 1) {
-                framebuffer[i + j * win_w] = walltex[i + texid * walltex_size + j * walltex_size * walltex_cnt];
             }
         }
     }
