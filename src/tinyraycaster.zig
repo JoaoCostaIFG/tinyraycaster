@@ -2,6 +2,7 @@ const std = @import("std");
 const c = std.c; // for file output
 const assert = std.debug.assert;
 const print = std.debug.print;
+const fs = std.fs;
 // const stb = @cImport({
 // @cDefine("STB_IMAGE_IMPLEMENTATION", {});
 // @cInclude("stb_image.h");
@@ -53,6 +54,8 @@ fn dropPpmImage(filename: [*:0]const u8, image: []const u32, w: usize, h: usize)
     }
 
     _ = c.fclose(f.?);
+
+    const cwd: fs.DIR = fs.cwd();
 }
 
 fn drawRectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w: usize, h: usize, color: u32) void {
