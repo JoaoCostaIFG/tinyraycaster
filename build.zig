@@ -7,7 +7,7 @@ pub fn build(b: *Builder) void {
     const exe = b.addExecutable("tinyraycaster", "src/tinyraycaster.zig");
     exe.setTarget(target);
     exe.setBuildMode(mode);
-    exe.setOutputDir(".");
+    // exe.setOutputDir(".");
     exe.linkLibC();
     exe.addIncludeDir("./include");
     // exe.addCSourceFile("./include/stb_image.h", &[_][]const u8{"-std=c99"});

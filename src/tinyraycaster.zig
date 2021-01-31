@@ -45,7 +45,7 @@ fn dropPpmImage(filename: []const u8, image: []const u32, w: usize, h: usize) bo
     var color: [4]u8 = undefined;
     while (i < w * h) : (i += 1) {
         unpackColor(image[i], &color[0], &color[1], &color[2], &color[3]);
-        _ = buf_writer.write(color[0..3]) catch false;
+        _ = buf_writer.writeAll(color[0..3]) catch return false;
     }
 
     buf.flush() catch return false;
