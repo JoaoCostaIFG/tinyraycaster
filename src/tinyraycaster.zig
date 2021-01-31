@@ -1,16 +1,13 @@
 const std = @import("std");
+const c = @import("c.zig");
 const assert = std.debug.assert;
 const log = std.log;
 const fs = std.fs;
-// const stb = @cImport({
-// @cDefine("STB_IMAGE_IMPLEMENTATION", {});
-// @cInclude("stb_image.h");
-// });
 
 pub extern "c" fn rand() c_int;
 // pub extern "c" fn sprintf(noalias __s: [*]u8, noalias __format: [*]const u8, ...) c_int;
 
-const map_data = @embedFile("../res/map");
+const map_data = @embedFile("../assets/map");
 
 // TODO why bother with alpha ?
 inline fn packColor(r: u32, g: u32, b: u32) u32 {
@@ -91,23 +88,54 @@ pub fn readMap(map_w: *usize, map_h: *usize) [map_data.len]u8 {
     return map;
 }
 
-fn loadTexture(filename: [*:0]const u8) bool {
+fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_cnt: *usize) bool {
     var nchannels: c_int = -1;
     var w: c_int = undefined;
     var h: c_int = undefined;
+    const pixmap: ?[*]u8 = c.stbi_load(filename, &w, &h, &nchannels, 0);
+    if (pixmap == null) {
+        log.err("loadTexture: can't load the texture ({s}).", .{filename});
+        return false;
+    }
+    defer c.stbi_image_free(pixmap.?);
 
-    // _ = stb.stbi_load("tchu", &w, &h, &[_][]const u8{}&nchannels, 0);
-    // _ = stb.stbi_is_16_bit_from_file(null);
+    if (4 != nchannels) {
+        log.err("loadTexture: the texture must be a 32 bit image ({s}).", .{filename});
+        return false;
+    }
+
+    tex_cnt.* = @intCast(usize, @divTrunc(w, h));
+    tex_size.* = @intCast(usize, w) / tex_cnt.*;
+    if (w != @intCast(usize, h) * tex_cnt.*) {
+        log.err("loadTexture: the texture file must contain N square textures packed horizontally ({s}).", .{filename});
+        return false;
+    }
+
+    texture.* = std.heap.c_allocator.alloc(u32, @intCast(usize, h * w)) catch {
+        log.err("loadTexture: texture memory allocation failed ({s}).", .{filename});
+        return false;
+    };
+    var i: usize = 0;
+    while (i < h) : (i += 1) {
+        var j: usize = 0;
+        while (j < w) : (j += 1) {
+            const ind: usize = i * @intCast(usize, w) + j;
+            texture.*[ind] = packColor_a(pixmap.?[ind * 4], pixmap.?[ind * 4 + 1], pixmap.?[ind * 4 + 2], pixmap.?[ind * 4 + 3]);
+        }
+    }
 
     return true;
 }
 
 pub fn main() !void {
-    _ = loadTexture("../res/walltext.png");
+    var walltex: []u32 = undefined;
+    var walltex_size: usize = undefined;
+    var walltex_cnt: usize = undefined;
+    _ = loadTexture("assets/walltext.png", &walltex, &walltex_size, &walltex_cnt);
 
     const win_w: usize = 1024; // image width
     const win_h: usize = 512; // image height
-    // the image itself, initialized to red
+    // the image itself, initialized to white
     var framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
     // read map
     var map_w: usize = 0;

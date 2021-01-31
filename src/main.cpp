@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <cassert>
 #define STB_IMAGE_IMPLEMENTATION
-#include "../include/stb_image.h"
+#include "../stb_image-2.26/stb_image.h"
 
 uint32_t pack_color(const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t a=255) {
     return (a<<24) + (b<<16) + (g<<8) + r;
@@ -118,7 +118,7 @@ int main() {
     std::vector<uint32_t> walltext; // textures for the walls
     size_t walltext_size;  // texture dimensions (it is a square)
     size_t walltext_cnt;   // number of different textures in the image
-    if (!load_texture("res/walltext.png", walltext, walltext_size, walltext_cnt)) {
+    if (!load_texture("assets/walltext.png", walltext, walltext_size, walltext_cnt)) {
         std::cerr << "Failed to load wall textures" << std::endl;
         return -1;
     }
