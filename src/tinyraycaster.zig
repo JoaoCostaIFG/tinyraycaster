@@ -9,7 +9,6 @@ pub extern "c" fn rand() c_int;
 
 const map_data = @embedFile("../assets/map");
 
-// TODO why bother with alpha ?
 inline fn packColor(r: u32, g: u32, b: u32) u32 {
     return (b << 16) + (g << 8) + r;
 }
@@ -248,8 +247,51 @@ pub fn main() !u8 {
     }
 
     // output resulting image
-    if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
-        log.err("dropPpmImage: Saving the image to a file failed!", .{});
+    // if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
+    // log.err("dropPpmImage: Saving the image to a file failed!", .{});
+
+    _ = c.SDL_Init(c.SDL_INIT_VIDEO);
+    defer c.SDL_Quit();
+    var window: ?*c.SDL_Window =
+        c.SDL_CreateWindow("TinyRayCaster", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, win_w, win_h, 0);
+    _ = c.SDL_ShowCursor(c.SDL_DISABLE);
+
+    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, 0);
+    var texture: ?*c.SDL_Texture =
+        c.SDL_CreateTexture(renderer.?, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_STATIC, win_w, win_h);
+
+    var quit: bool = false;
+    var event: c.SDL_Event = undefined;
+    while (!quit) {
+        _ = c.SDL_UpdateTexture(texture.?, null, &framebuffer, win_w * @sizeOf(u32));
+
+        _ = c.SDL_WaitEvent(&event);
+        switch (event.type) {
+            c.SDL_KEYDOWN => {
+                switch (event.key.keysym.sym) {
+                    c.SDLK_q, c.SDLK_ESCAPE => {
+                        quit = true;
+                    },
+                    else => {},
+                }
+            },
+            c.SDL_MOUSEMOTION => {
+                std.debug.print("mouse move\n", .{});
+            },
+            c.SDL_QUIT => {
+                quit = true;
+            },
+            else => {},
+        }
+
+        _ = c.SDL_RenderClear(renderer.?);
+        _ = c.SDL_RenderCopy(renderer.?, texture.?, null, null);
+        c.SDL_RenderPresent(renderer.?);
+    }
+
+    c.SDL_DestroyTexture(texture.?);
+    c.SDL_DestroyRenderer(renderer.?);
+    c.SDL_DestroyWindow(window.?);
 
     return 0;
 }

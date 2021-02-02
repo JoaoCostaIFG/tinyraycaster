@@ -9,6 +9,7 @@ pub fn build(b: *Builder) void {
     exe.setTarget(target);
     exe.setBuildMode(mode);
     exe.addIncludeDir("./stb_image-2.26");
+    exe.linkSystemLibrary("SDL2");
     exe.linkLibC();
     exe.addCSourceFile("./stb_image-2.26/stb_image_impl.c", &[_][]const u8{"-std=c99"});
 
