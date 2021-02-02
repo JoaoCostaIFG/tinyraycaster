@@ -1,4 +1,5 @@
 .ccls-cache/*
+CS_SESSION
 a.out
 *.ppm
 tinyraycaster
