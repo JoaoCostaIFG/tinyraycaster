@@ -111,7 +111,6 @@ fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_c
         return false;
     }
 
-    // TODO we need to free this
     texture.* = std.heap.c_allocator.alloc(u32, @intCast(usize, h * w)) catch {
         log.err("loadTexture: texture memory allocation failed ({s}).", .{filename});
         return false;
@@ -129,12 +128,11 @@ fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_c
 }
 
 // TODO txcoord usize instead of isize?
-fn texture_column(img: *[]u32, texsize: usize, ntextures: usize, texid: usize, texcoord: usize, column_height: usize) *[]u32 {
+fn textureColumn(img: *[]u32, texsize: usize, ntextures: usize, texid: usize, texcoord: usize, column_height: usize) *[]u32 {
     const img_w: usize = texsize * ntextures;
     const img_h: usize = texsize;
     assert(texcoord < texsize and texid < ntextures);
 
-    // TODO we need to free this
     var column = std.heap.c_allocator.alloc(u32, column_height) catch unreachable;
 
     var y: usize = 0;
@@ -146,11 +144,13 @@ fn texture_column(img: *[]u32, texsize: usize, ntextures: usize, texid: usize, t
     return &column;
 }
 
-pub fn main() !void {
+pub fn main() !u8 {
     var walltex: []u32 = undefined;
     var walltex_size: usize = undefined;
     var walltex_cnt: usize = undefined;
-    _ = loadTexture("assets/walltext.png", &walltex, &walltex_size, &walltex_cnt);
+    if (!loadTexture("assets/walltext.png", &walltex, &walltex_size, &walltex_cnt))
+        return 1;
+    defer std.heap.c_allocator.free(walltex);
 
     const win_w: usize = 1024; // image width
     const win_h: usize = 512; // image height
@@ -229,7 +229,9 @@ pub fn main() !void {
                         x_texcoord += @intCast(isize, walltex_size); // do not forget x_texcoord can be negative, fix that
 
                     // draw textured wall
-                    const column: *[]u32 = texture_column(&walltex, walltex_size, walltex_cnt, texid, @intCast(usize, x_texcoord), column_height);
+                    const column: *[]u32 = textureColumn(&walltex, walltex_size, walltex_cnt, texid, @intCast(usize, x_texcoord), column_height);
+                    defer std.heap.c_allocator.free(column.*);
+
                     pix_x = win_w / 2 + i;
                     var j: usize = 0;
                     while (j < column_height) : (j += 1) {
@@ -248,4 +250,6 @@ pub fn main() !void {
     // output resulting image
     if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
         log.err("dropPpmImage: Saving the image to a file failed!", .{});
+
+    return 0;
 }
