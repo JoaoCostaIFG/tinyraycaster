@@ -246,10 +246,6 @@ pub fn main() !u8 {
         }
     }
 
-    // output resulting image
-    // if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
-    // log.err("dropPpmImage: Saving the image to a file failed!", .{});
-
     _ = c.SDL_Init(c.SDL_INIT_VIDEO);
     defer c.SDL_Quit();
     var window: ?*c.SDL_Window =
@@ -269,6 +265,11 @@ pub fn main() !u8 {
         switch (event.type) {
             c.SDL_KEYDOWN => {
                 switch (event.key.keysym.sym) {
+                    c.SDLK_PRINTSCREEN => {
+                        // output resulting image
+                        if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
+                            log.err("dropPpmImage: Saving the image to a file failed!", .{});
+                    },
                     c.SDLK_q, c.SDLK_ESCAPE => {
                         quit = true;
                     },
