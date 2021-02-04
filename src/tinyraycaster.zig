@@ -4,13 +4,14 @@ const assert = std.debug.assert;
 const log = std.log;
 const fs = std.fs;
 
-pub extern "c" fn rand() c_int;
-// pub extern "c" fn sprintf(noalias __s: [*]u8, noalias __format: [*]const u8, ...) c_int;
+const Framebuffer = @import("framebuffer.zig").Framebuffer;
+
+pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
 
 const map_data = @embedFile("../assets/map");
 
 inline fn packColor(r: u32, g: u32, b: u32) u32 {
-    return (b << 16) + (g << 8) + r;
+    return (255 << 24) + (b << 16) + (g << 8) + r;
 }
 
 inline fn packColor_a(r: u32, g: u32, b: u32, a: u32) u32 {
@@ -48,22 +49,6 @@ fn dropPpmImage(filename: []const u8, image: []const u32, w: usize, h: usize) bo
     f.close();
 
     return true;
-}
-
-fn drawRectangle(img: []u32, img_w: usize, img_h: usize, x: usize, y: usize, w: usize, h: usize, color: u32) void {
-    assert(img.len == img_w * img_h);
-    var i: usize = 0;
-    while (i < h) : (i += 1) {
-        var j: usize = 0;
-        while (j < w) : (j += 1) {
-            const cx: usize = x + j;
-            const cy: usize = y + i;
-            // no need to check for negative values (unsigned vars)
-            if (cx >= img_w or cy >= img_h)
-                continue;
-            img[cx + cy * img_w] = color;
-        }
-    }
 }
 
 pub fn readMap(map_w: *usize, map_h: *usize) [map_data.len]u8 {
@@ -154,7 +139,13 @@ pub fn main() !u8 {
     const win_w: usize = 1024; // image width
     const win_h: usize = 512; // image height
     // the image itself, initialized to white
-    var framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
+    var framebuffer = Framebuffer{
+        .win_w = 1024,
+        .win_h = 512,
+    };
+    try framebuffer.init();
+    defer framebuffer.destructor();
+    framebuffer.clear(packColor(255, 255, 255));
     // read map
     var map_w: usize = 0;
     var map_h: usize = 0;
@@ -170,7 +161,7 @@ pub fn main() !u8 {
     const rect_h: usize = win_h / map_h;
 
     // clear the screen
-    framebuffer = [_]u32{packColor(255, 255, 255)} ** (win_w * win_h);
+    framebuffer.clear(packColor(255, 255, 255));
 
     // draw the map
     {
@@ -183,13 +174,13 @@ pub fn main() !u8 {
                 const rect_y: usize = i * rect_h;
                 const texid: u32 = map[i * map_w + j] - '0';
                 assert(texid < walltex_cnt);
-                drawRectangle(&framebuffer, win_w, win_h, rect_x, rect_y, rect_w, rect_h, walltex[texid * walltex_size]);
+                framebuffer.drawRectangle(rect_x, rect_y, rect_w, rect_h, walltex[texid * walltex_size]);
             }
         }
     }
 
     // draw the player on the map
-    drawRectangle(&framebuffer, win_w, win_h, @floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
+    framebuffer.drawRectangle(@floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
 
     // draw the visibility cone AND the "3D" view
     {
@@ -206,7 +197,7 @@ pub fn main() !u8 {
                 var pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
                 var pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
                 // this draws the visibility cone
-                framebuffer[pix_y * win_w + pix_x] = packColor(160, 160, 160);
+                framebuffer.setPixel(pix_x, pix_y, packColor(160, 160, 160));
 
                 // our ray touches a wall, so draw the vertical column to create an
                 // illusion of 3D
@@ -237,7 +228,7 @@ pub fn main() !u8 {
                         pix_y = j + win_h / 2 - column_height / 2;
                         if (pix_y < 0 or pix_y >= win_h)
                             continue;
-                        framebuffer[pix_y * win_w + pix_x] = column.*[j];
+                        framebuffer.setPixel(pix_x, pix_y, column.*[j]);
                     }
 
                     break;
@@ -250,7 +241,9 @@ pub fn main() !u8 {
     defer c.SDL_Quit();
     var window: ?*c.SDL_Window =
         c.SDL_CreateWindow("TinyRayCaster", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, win_w, win_h, 0);
+    // SDL2 ops
     _ = c.SDL_ShowCursor(c.SDL_DISABLE);
+    _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
     var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, 0);
     var texture: ?*c.SDL_Texture =
@@ -259,7 +252,7 @@ pub fn main() !u8 {
     var quit: bool = false;
     var event: c.SDL_Event = undefined;
     while (!quit) {
-        _ = c.SDL_UpdateTexture(texture.?, null, &framebuffer, win_w * @sizeOf(u32));
+        _ = c.SDL_UpdateTexture(texture.?, null, framebuffer.buffer.ptr, win_w * @sizeOf(u32));
 
         _ = c.SDL_WaitEvent(&event);
         switch (event.type) {
@@ -267,7 +260,7 @@ pub fn main() !u8 {
                 switch (event.key.keysym.sym) {
                     c.SDLK_PRINTSCREEN => {
                         // output resulting image
-                        if (!dropPpmImage("out.ppm", &framebuffer, win_w, win_h))
+                        if (!dropPpmImage("out.ppm", framebuffer.buffer, win_w, win_h))
                             log.err("dropPpmImage: Saving the image to a file failed!", .{});
                     },
                     c.SDLK_q, c.SDLK_ESCAPE => {
@@ -277,7 +270,7 @@ pub fn main() !u8 {
                 }
             },
             c.SDL_MOUSEMOTION => {
-                std.debug.print("mouse move\n", .{});
+                // std.debug.print("mouse move {} {}\n", .{ event.motion.xrel, event.motion.yrel });
             },
             c.SDL_QUIT => {
                 quit = true;
