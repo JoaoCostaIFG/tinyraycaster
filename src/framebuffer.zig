@@ -1,4 +1,7 @@
 const std = @import("std");
+const fs = std.fs;
+
+const utils = @import("utils.zig");
 
 pub const Framebuffer = struct {
     win_w: usize,
@@ -38,27 +41,27 @@ pub const Framebuffer = struct {
         }
     }
 
-    // pub fn dropPpmImage(filename: []const u8) bool {
-    // // open file
-    // const cwd: fs.Dir = fs.cwd();
-    // const f: fs.File = cwd.createFile(filename, fs.File.CreateFlags{}) catch return false;
-    // // create a buffered writer
-    // var buf = std.io.bufferedWriter(f.writer());
-    // var buf_writer = buf.writer();
+    pub fn dropPpmImage(self: *Framebuffer, filename: []const u8) bool {
+        // open file
+        const cwd: fs.Dir = fs.cwd();
+        const f: fs.File = cwd.createFile(filename, fs.File.CreateFlags{}) catch return false;
+        // create a buffered writer
+        var buf = std.io.bufferedWriter(f.writer());
+        var buf_writer = buf.writer();
 
-    // // ppm file type meta-data
-    // buf_writer.print("P6\n{} {}\n255\n", .{ w, h }) catch return false;
-    // // write file data
-    // var color: [4]u8 = undefined;
-    // var i: usize = 0;
-    // while (i < w * h) : (i += 1) {
-    // unpackColor(image[i], &color[0], &color[1], &color[2], &color[3]);
-    // _ = buf_writer.writeAll(color[0..3]) catch return false;
-    // }
+        // ppm file type meta-data
+        buf_writer.print("P6\n{} {}\n255\n", .{ self.win_w, self.win_h }) catch return false;
+        // write file data
+        var color: [4]u8 = undefined;
+        var i: usize = 0;
+        while (i < self.win_w * self.win_h) : (i += 1) {
+            utils.unpackColor(self.buffer[i], &color[0], &color[1], &color[2], &color[3]);
+            _ = buf_writer.writeAll(color[0..3]) catch return false;
+        }
 
-    // buf.flush() catch return false;
-    // f.close();
+        buf.flush() catch return false;
+        f.close();
 
-    // return true;
-    // }
+        return true;
+    }
 };

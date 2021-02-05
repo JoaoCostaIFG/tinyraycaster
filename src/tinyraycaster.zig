@@ -2,54 +2,13 @@ const std = @import("std");
 const c = @import("c.zig");
 const assert = std.debug.assert;
 const log = std.log;
-const fs = std.fs;
 
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
+const utils = @import("utils.zig");
 
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
 
 const map_data = @embedFile("../assets/map");
-
-inline fn packColor(r: u32, g: u32, b: u32) u32 {
-    return (255 << 24) + (b << 16) + (g << 8) + r;
-}
-
-inline fn packColor_a(r: u32, g: u32, b: u32, a: u32) u32 {
-    return (a << 24) + (b << 16) + (g << 8) + r;
-}
-
-inline fn unpackColor(color: u32, r: *u8, g: *u8, b: *u8, a: *u8) void {
-    r.* = @intCast(u8, color & 255);
-    g.* = @intCast(u8, (color >> 8) & 255);
-    b.* = @intCast(u8, (color >> 16) & 255);
-    a.* = @intCast(u8, (color >> 24) & 255);
-}
-
-fn dropPpmImage(filename: []const u8, image: []const u32, w: usize, h: usize) bool {
-    assert(image.len == w * h);
-
-    // open file
-    const cwd: fs.Dir = fs.cwd();
-    const f: fs.File = cwd.createFile(filename, fs.File.CreateFlags{}) catch return false;
-    // create a buffered writer
-    var buf = std.io.bufferedWriter(f.writer());
-    var buf_writer = buf.writer();
-
-    // ppm file type meta-data
-    buf_writer.print("P6\n{} {}\n255\n", .{ w, h }) catch return false;
-    // write file data
-    var i: usize = 0;
-    var color: [4]u8 = undefined;
-    while (i < w * h) : (i += 1) {
-        unpackColor(image[i], &color[0], &color[1], &color[2], &color[3]);
-        _ = buf_writer.writeAll(color[0..3]) catch return false;
-    }
-
-    buf.flush() catch return false;
-    f.close();
-
-    return true;
-}
 
 pub fn readMap(map_w: *usize, map_h: *usize) [map_data.len]u8 {
     map_w.* = 0;
@@ -104,7 +63,7 @@ fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_c
         var j: usize = 0;
         while (j < w) : (j += 1) {
             const ind: usize = i * @intCast(usize, w) + j;
-            texture.*[ind] = packColor_a(pixmap.?[ind * 4], pixmap.?[ind * 4 + 1], pixmap.?[ind * 4 + 2], pixmap.?[ind * 4 + 3]);
+            texture.*[ind] = utils.packColorA(pixmap.?[ind * 4], pixmap.?[ind * 4 + 1], pixmap.?[ind * 4 + 2], pixmap.?[ind * 4 + 3]);
         }
     }
 
@@ -145,7 +104,7 @@ pub fn main() !u8 {
     };
     try framebuffer.init();
     defer framebuffer.destructor();
-    framebuffer.clear(packColor(255, 255, 255));
+    framebuffer.clear(utils.packColor(255, 255, 255));
     // read map
     var map_w: usize = 0;
     var map_h: usize = 0;
@@ -161,7 +120,7 @@ pub fn main() !u8 {
     const rect_h: usize = win_h / map_h;
 
     // clear the screen
-    framebuffer.clear(packColor(255, 255, 255));
+    framebuffer.clear(utils.packColor(255, 255, 255));
 
     // draw the map
     {
@@ -180,7 +139,7 @@ pub fn main() !u8 {
     }
 
     // draw the player on the map
-    framebuffer.drawRectangle(@floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, packColor(0, 255, 0));
+    framebuffer.drawRectangle(@floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, utils.packColor(0, 255, 0));
 
     // draw the visibility cone AND the "3D" view
     {
@@ -197,7 +156,7 @@ pub fn main() !u8 {
                 var pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
                 var pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
                 // this draws the visibility cone
-                framebuffer.setPixel(pix_x, pix_y, packColor(160, 160, 160));
+                framebuffer.setPixel(pix_x, pix_y, utils.packColor(160, 160, 160));
 
                 // our ray touches a wall, so draw the vertical column to create an
                 // illusion of 3D
@@ -259,8 +218,9 @@ pub fn main() !u8 {
             c.SDL_KEYDOWN => {
                 switch (event.key.keysym.sym) {
                     c.SDLK_PRINTSCREEN => {
+                        log.info("Print screen.", .{});
                         // output resulting image
-                        if (!dropPpmImage("out.ppm", framebuffer.buffer, win_w, win_h))
+                        if (!framebuffer.dropPpmImage("out.ppm"))
                             log.err("dropPpmImage: Saving the image to a file failed!", .{});
                     },
                     c.SDLK_q, c.SDLK_ESCAPE => {
