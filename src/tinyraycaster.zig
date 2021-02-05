@@ -1,25 +1,27 @@
 const std = @import("std");
 const c = @import("c.zig");
+const ArrayList = std.ArrayList;
 const assert = std.debug.assert;
 const log = std.log;
 
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
 const Map = @import("map.zig");
 const Player = @import("player.zig").Player;
+const Sprite = @import("sprite.zig").Sprite;
 const Texture = @import("texture.zig");
 const utils = @import("utils.zig");
 
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
 
-fn wallXTexcoord(walltex: *Texture.Texture, x: f32, y: f32) usize {
-    const hitx: f32 = x - @floor(x + 0.5); // hitx and hity contain (signed) fractional parts of cx and cy,
-    const hity: f32 = y - @floor(y + 0.5); // between [-0.5, 0.5], one is very close to 0
-    var x_texcoord: isize = @floatToInt(isize, hitx * @intToFloat(f32, walltex.*.size));
+fn wallXTexcoord(walltex: *Texture.Texture, hitx: f32, hity: f32) usize {
+    const x: f32 = hitx - @floor(hitx + 0.5); // hitx and hity contain (signed) fractional parts of cx and cy,
+    const y: f32 = hity - @floor(hity + 0.5); // between [-0.5, 0.5], one is very close to 0
+    var x_texcoord: isize = @floatToInt(isize, x * @intToFloat(f32, walltex.size));
 
     // we need to determine whether we hit a "vertical" or
     // a "horizontal" wall (w.r.t the map)
-    if (@fabs(hity) > @fabs(hitx))
-        x_texcoord = @floatToInt(isize, hity * @intToFloat(f32, walltex.*.size));
+    if (@fabs(y) > @fabs(x))
+        x_texcoord = @floatToInt(isize, y * @intToFloat(f32, walltex.size));
     if (x_texcoord < 0)
         x_texcoord += @intCast(isize, walltex.*.size); // do not forget x_texcoord can be negative, fix that
 
@@ -40,7 +42,8 @@ fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, cell_w: u
     }
 }
 
-fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, walltex: *Texture.Texture) void {
+// TODO sprites should be anytype?
+fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, walltex: *Texture.Texture, monstertex: *Texture.Texture) void {
     fb.clear(utils.packColor(255, 255, 255)); // clear the screen
 
     var i: usize = undefined;
@@ -95,6 +98,18 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, walltex: *Texture.Te
             break;
         }
     }
+
+    i = 0;
+    while (i < sprites.items.len) : (i += 1) {
+        const sprite = &sprites.items[i];
+        fb.drawRectangle(
+            @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
+            @floatToInt(usize, @round(sprite.y * @intToFloat(f32, cell_h) - 3)),
+            6,
+            6,
+            utils.packColor(255, 0, 0),
+        );
+    }
 }
 
 pub fn main() !u8 {
@@ -108,6 +123,14 @@ pub fn main() !u8 {
     // load textures
     var walltex = Texture.loadTexture("assets/walltext.png");
     defer walltex.destructor();
+    var monstertex = Texture.loadTexture("assets/monsters.png");
+    defer monstertex.destructor();
+    // sprites
+    var sprites = ArrayList(Sprite).init(std.heap.c_allocator);
+    defer sprites.deinit();
+    try sprites.append(Sprite{ .x = 1.834, .y = 8.765, .tex_id = 0 });
+    try sprites.append(Sprite{ .x = 5.323, .y = 5.365, .tex_id = 1 });
+    try sprites.append(Sprite{ .x = 4.123, .y = 10.265, .tex_id = 1 });
     // read map
     var map = Map.readMap();
     defer map.destructor();
@@ -120,7 +143,7 @@ pub fn main() !u8 {
         .fov = std.math.pi / 3.0,
     };
 
-    render(&framebuffer, &map, &player, &walltex);
+    render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
 
     // SDL2
     _ = c.SDL_Init(c.SDL_INIT_VIDEO);
@@ -175,7 +198,7 @@ pub fn main() !u8 {
                         player.right();
                     },
                     c.SDLK_n => {
-                        render(&framebuffer, &map, &player, &walltex);
+                        render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
                     },
                     c.SDLK_PRINTSCREEN => {
                         log.info("Print screen.", .{});
