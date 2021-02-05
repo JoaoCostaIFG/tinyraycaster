@@ -5,31 +5,10 @@ const log = std.log;
 
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
 const utils = @import("utils.zig");
+const Map = @import("map.zig");
+const Player = @import("player.zig").Player;
 
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
-
-const map_data = @embedFile("../assets/map");
-
-pub fn readMap(map_w: *usize, map_h: *usize) [map_data.len]u8 {
-    map_w.* = 0;
-    map_h.* = 0;
-
-    var map = [_]u8{0} ** map_data.len;
-    var i: usize = 0;
-    var j: usize = 0;
-    while (i < map_data.len) : (i += 1) {
-        if (map_data[i] != '\n') {
-            map[j] = map_data[i];
-            j += 1;
-            map_w.* += 1;
-        } else {
-            map_h.* += 1;
-        }
-    }
-
-    map_w.* /= map_h.*;
-    return map;
-}
 
 fn loadTexture(filename: [*:0]const u8, texture: *[]u32, tex_size: *usize, tex_cnt: *usize) bool {
     var nchannels: c_int = -1;
@@ -106,32 +85,30 @@ pub fn main() !u8 {
     defer framebuffer.destructor();
     framebuffer.clear(utils.packColor(255, 255, 255));
     // read map
-    var map_w: usize = 0;
-    var map_h: usize = 0;
-    const map = readMap(&map_w, &map_h);
+    var map = Map.readMap();
+    defer map.destructor();
     // player options
-    var player_x: f32 = 3.456; // player x
-    var player_y: f32 = 2.345; // player y
-    var player_a: f32 = 1.523; // player view direction
-    const fov: f32 = std.math.pi / 3.0; // field of view
+    var player = Player{
+        .x = 3.456,
+        .y = 2.345,
+        .angle = 1.523,
+        .fov = std.math.pi / 3.0,
+    };
 
     // draw map
-    const rect_w: usize = win_w / (map_w * 2);
-    const rect_h: usize = win_h / map_h;
-
+    const rect_w: usize = win_w / (map.w * 2);
+    const rect_h: usize = win_h / map.h;
     // clear the screen
     framebuffer.clear(utils.packColor(255, 255, 255));
-
-    // draw the map
     {
         var i: usize = 0;
-        while (i < map_h) : (i += 1) {
+        while (i < map.h) : (i += 1) {
             var j: usize = 0;
-            while (j < map_w) : (j += 1) {
-                if (map[i * map_w + j] == ' ') continue; // skip empty spaces
+            while (j < map.w) : (j += 1) {
+                if (map.isEmpty(j, i)) continue; // skip empty spaces
                 const rect_x: usize = j * rect_w;
                 const rect_y: usize = i * rect_h;
-                const texid: u32 = map[i * map_w + j] - '0';
+                const texid: u32 = map.get(j, i);
                 assert(texid < walltex_cnt);
                 framebuffer.drawRectangle(rect_x, rect_y, rect_w, rect_h, walltex[texid * walltex_size]);
             }
@@ -139,19 +116,19 @@ pub fn main() !u8 {
     }
 
     // draw the player on the map
-    framebuffer.drawRectangle(@floatToInt(usize, player_x * @intToFloat(f32, rect_w)), @floatToInt(usize, player_y * @intToFloat(f32, rect_h)), 5, 5, utils.packColor(0, 255, 0));
+    framebuffer.drawRectangle(@floatToInt(usize, player.x * @intToFloat(f32, rect_w)), @floatToInt(usize, player.y * @intToFloat(f32, rect_h)), 5, 5, utils.packColor(0, 255, 0));
 
     // draw the visibility cone AND the "3D" view
     {
         var i: usize = 0;
         while (i < win_w / 2) : (i += 1) { // draw the visibility cone
-            const angle: f32 = player_a - fov / 2.0 + fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
+            const angle: f32 = player.angle - player.fov / 2.0 + player.fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
 
             // laser range finder
             var t: f32 = 0;
             while (t < 20) : (t += 0.01) {
-                const cx: f32 = player_x + t * @cos(angle);
-                const cy: f32 = player_y + t * @sin(angle);
+                const cx: f32 = player.x + t * @cos(angle);
+                const cy: f32 = player.y + t * @sin(angle);
 
                 var pix_x: usize = @floatToInt(usize, cx * @intToFloat(f32, rect_w));
                 var pix_y: usize = @floatToInt(usize, cy * @intToFloat(f32, rect_h));
@@ -160,11 +137,12 @@ pub fn main() !u8 {
 
                 // our ray touches a wall, so draw the vertical column to create an
                 // illusion of 3D
-                const mape: u32 = map[@floatToInt(usize, cx) + @floatToInt(usize, cy) * map_w];
-                if (mape != ' ') { // hit obstacle
-                    const texid = mape - '0';
+                const map_x: usize = @floatToInt(usize, cx);
+                const map_y: usize = @floatToInt(usize, cy);
+                if (!map.isEmpty(map_x, map_y)) { // hit obstacle
+                    const texid = map.get(map_x, map_y);
                     assert(texid < walltex_cnt);
-                    const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player_a)));
+                    const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player.angle)));
 
                     const hitx: f32 = cx - @floor(cx + 0.5); // hitx and hity contain (signed) fractional parts of cx and cy,
                     const hity: f32 = cy - @floor(cy + 0.5); // between [-0.5, 0.5], one is very close to 0
