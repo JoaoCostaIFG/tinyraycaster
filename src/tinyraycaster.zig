@@ -11,9 +11,9 @@ const utils = @import("utils.zig");
 
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
 
+fn render(framebuffer: *Framebuffer, map: *Map.Map, player: *Player, walltex: *Texture.Texture) void {}
+
 pub fn main() !u8 {
-    const win_w: usize = 1024; // image width
-    const win_h: usize = 512; // image height
     // the image itself, initialized to white
     var framebuffer = Framebuffer{
         .win_w = 1024,
@@ -37,8 +37,8 @@ pub fn main() !u8 {
     };
 
     // draw map
-    const rect_w: usize = win_w / (map.w * 2);
-    const rect_h: usize = win_h / map.h;
+    const rect_w: usize = framebuffer.win_w / (map.w * 2);
+    const rect_h: usize = framebuffer.win_h / map.h;
     // clear the screen
     framebuffer.clear(utils.packColor(255, 255, 255));
     {
@@ -61,8 +61,8 @@ pub fn main() !u8 {
     // draw the visibility cone AND the "3D" view
     {
         var i: usize = 0;
-        while (i < win_w / 2) : (i += 1) { // draw the visibility cone
-            const angle: f32 = player.angle - player.fov / 2.0 + player.fov * @intToFloat(f32, i) / @intToFloat(f32, win_w / 2);
+        while (i < framebuffer.win_w / 2) : (i += 1) { // draw the visibility cone
+            const angle: f32 = player.angle - player.fov / 2.0 + player.fov * @intToFloat(f32, i) / @intToFloat(f32, framebuffer.win_w / 2);
 
             // laser range finder
             var t: f32 = 0;
@@ -81,7 +81,7 @@ pub fn main() !u8 {
                 const map_y: usize = @floatToInt(usize, cy);
                 if (!map.isEmpty(map_x, map_y)) { // hit obstacle
                     const texid = map.get(map_x, map_y);
-                    const column_height: usize = @floatToInt(usize, @intToFloat(f32, win_h) / (t * @cos(angle - player.angle)));
+                    const column_height: usize = @floatToInt(usize, @intToFloat(f32, framebuffer.win_h) / (t * @cos(angle - player.angle)));
 
                     const hitx: f32 = cx - @floor(cx + 0.5); // hitx and hity contain (signed) fractional parts of cx and cy,
                     const hity: f32 = cy - @floor(cy + 0.5); // between [-0.5, 0.5], one is very close to 0
@@ -98,11 +98,11 @@ pub fn main() !u8 {
                     const column: []u32 = walltex.getScaledColumn(texid, @intCast(usize, x_texcoord), column_height);
                     defer std.heap.page_allocator.free(column);
 
-                    pix_x = win_w / 2 + i;
+                    pix_x = framebuffer.win_w / 2 + i;
                     var j: usize = 0;
                     while (j < column_height) : (j += 1) {
-                        pix_y = j + win_h / 2 - column_height / 2;
-                        if (pix_y < 0 or pix_y >= win_h)
+                        pix_y = j + framebuffer.win_h / 2 - column_height / 2;
+                        if (pix_y < 0 or pix_y >= framebuffer.win_h)
                             continue;
                         framebuffer.setPixel(pix_x, pix_y, column[j]);
                     }
@@ -116,19 +116,32 @@ pub fn main() !u8 {
     _ = c.SDL_Init(c.SDL_INIT_VIDEO);
     defer c.SDL_Quit();
     var window: ?*c.SDL_Window =
-        c.SDL_CreateWindow("TinyRayCaster", c.SDL_WINDOWPOS_UNDEFINED, c.SDL_WINDOWPOS_UNDEFINED, win_w, win_h, 0);
+        c.SDL_CreateWindow(
+        "TinyRayCaster",
+        c.SDL_WINDOWPOS_UNDEFINED,
+        c.SDL_WINDOWPOS_UNDEFINED,
+        framebuffer.win_w,
+        framebuffer.win_h,
+        0,
+    );
     // SDL2 ops
     _ = c.SDL_ShowCursor(c.SDL_DISABLE);
     _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
     var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, 0);
     var texture: ?*c.SDL_Texture =
-        c.SDL_CreateTexture(renderer.?, c.SDL_PIXELFORMAT_ABGR8888, c.SDL_TEXTUREACCESS_STATIC, win_w, win_h);
+        c.SDL_CreateTexture(
+        renderer.?,
+        c.SDL_PIXELFORMAT_ABGR8888,
+        c.SDL_TEXTUREACCESS_STATIC,
+        framebuffer.win_w,
+        framebuffer.win_h,
+    );
 
     var quit: bool = false;
     var event: c.SDL_Event = undefined;
     while (!quit) {
-        _ = c.SDL_UpdateTexture(texture.?, null, framebuffer.buffer.ptr, win_w * @sizeOf(u32));
+        _ = c.SDL_UpdateTexture(texture.?, null, framebuffer.buffer.ptr, framebuffer.win_w * @sizeOf(u32));
 
         _ = c.SDL_WaitEvent(&event);
         switch (event.type) {
