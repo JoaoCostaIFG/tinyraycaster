@@ -26,51 +26,47 @@ fn wallXTexcoord(walltex: *Texture.Texture, x: f32, y: f32) usize {
     return @intCast(usize, x_texcoord);
 }
 
-fn render(framebuffer: *Framebuffer, map: *Map.Map, player: *Player, walltex: *Texture.Texture) void {
-    framebuffer.clear(utils.packColor(255, 255, 255)); // clear the screen
+fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, cell_w: usize, cell_h: usize) void {
+    var i: usize = 0;
+    while (i < map.h) : (i += 1) {
+        var j: usize = 0;
+        while (j < map.w) : (j += 1) {
+            if (map.isEmpty(j, i)) continue; // skip empty spaces
+            const rect_x: usize = j * cell_w;
+            const rect_y: usize = i * cell_h;
+            const texid: u32 = map.get(j, i);
+            fb.drawRectangle(rect_x, rect_y, cell_w, cell_h, walltex.get(0, 0, texid));
+        }
+    }
+}
+
+fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, walltex: *Texture.Texture) void {
+    fb.clear(utils.packColor(255, 255, 255)); // clear the screen
 
     var i: usize = undefined;
     var j: usize = undefined;
 
-    // draw map
-    const rect_w: usize = framebuffer.win_w / (map.w * 2);
-    const rect_h: usize = framebuffer.win_h / map.h;
-    i = 0;
-    while (i < map.h) : (i += 1) {
-        j = 0;
-        while (j < map.w) : (j += 1) {
-            if (map.isEmpty(j, i)) continue; // skip empty spaces
-            const rect_x: usize = j * rect_w;
-            const rect_y: usize = i * rect_h;
-            const texid: u32 = map.get(j, i);
-            framebuffer.drawRectangle(rect_x, rect_y, rect_w, rect_h, walltex.get(0, 0, texid));
-        }
-    }
+    // size of one map cell on the screen
+    const cell_w: usize = fb.win_w / (map.w * 2);
+    const cell_h: usize = fb.win_h / map.h;
 
-    // draw the player on the map
-    // framebuffer.drawRectangle(
-    // @floatToInt(usize, player.x * @intToFloat(f32, rect_w)),
-    // @floatToInt(usize, player.y * @intToFloat(f32, rect_h)),
-    // rect_w,
-    // rect_h,
-    // utils.packColor(0, 255, 0),
-    // );
+    drawMap(fb, map, walltex, cell_w, cell_h);
 
     // draw the visibility cone AND the "3D" view
     i = 0;
-    while (i < framebuffer.win_w / 2) : (i += 1) { // draw the visibility cone
-        const angle: f32 = player.getRayAngle(@intToFloat(f32, i), @intToFloat(f32, framebuffer.win_w) / 2.0);
+    while (i < fb.win_w / 2) : (i += 1) { // draw the visibility cone
+        const angle: f32 = player.getRayAngle(@intToFloat(f32, i), @intToFloat(f32, fb.win_w) / 2.0);
 
-        // laser range finder
+        // ray marching loop
         var t: f32 = 0;
         while (t < 20) : (t += 0.01) {
             const x: f32 = player.x + t * @cos(angle);
             const y: f32 = player.y + t * @sin(angle);
 
             // this draws the visibility cone
-            framebuffer.*.setPixel(
-                @floatToInt(usize, x * @intToFloat(f32, rect_w)),
-                @floatToInt(usize, y * @intToFloat(f32, rect_h)),
+            fb.*.setPixel(
+                @floatToInt(usize, x * @intToFloat(f32, cell_w)),
+                @floatToInt(usize, y * @intToFloat(f32, cell_h)),
                 utils.packColor(160, 160, 160),
             );
             if (map.isEmpty(@floatToInt(usize, x), @floatToInt(usize, y))) continue;
@@ -78,21 +74,22 @@ fn render(framebuffer: *Framebuffer, map: *Map.Map, player: *Player, walltex: *T
             // our ray touches a wall, so draw the vertical column to create an
             // illusion of 3D
             const texid = map.get(@floatToInt(usize, x), @floatToInt(usize, y));
+            if (t * @cos(angle - player.angle) == 0) continue;
             const column_height: usize = @floatToInt(
                 usize,
-                @intToFloat(f32, framebuffer.win_h) / (t * @cos(angle - player.angle)),
+                @intToFloat(f32, fb.win_h) / (t * @cos(angle - player.angle)),
             );
 
             // draw textured wall
             const column: []u32 = walltex.getScaledColumn(texid, wallXTexcoord(walltex, x, y), column_height);
             defer std.heap.page_allocator.free(column);
 
-            const pix_x: usize = framebuffer.win_w / 2 + i;
+            const pix_x: usize = fb.win_w / 2 + i;
             j = 0;
-            while (j < column_height) : (j += 1) {
-                const pix_y: usize = j + framebuffer.win_h / 2 - column_height / 2;
-                if (pix_y >= 0 and pix_y < framebuffer.win_h)
-                    framebuffer.setPixel(pix_x, pix_y, column[j]);
+            while (j < column_height and j < fb.win_h) : (j += 1) {
+                const pix_y: usize = j + fb.win_h / 2 -% column_height / 2;
+                if (pix_y >= 0 and pix_y < fb.win_h)
+                    fb.setPixel(pix_x, pix_y, column[j]);
             }
 
             break;
@@ -141,12 +138,12 @@ pub fn main() !u8 {
     _ = c.SDL_ShowCursor(c.SDL_DISABLE);
     _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
-    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, 0);
+    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC);
     var texture: ?*c.SDL_Texture =
         c.SDL_CreateTexture(
         renderer.?,
         c.SDL_PIXELFORMAT_ABGR8888,
-        c.SDL_TEXTUREACCESS_STATIC,
+        c.SDL_TEXTUREACCESS_STREAMING,
         @intCast(c_int, framebuffer.win_w),
         @intCast(c_int, framebuffer.win_h),
     );
