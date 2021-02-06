@@ -1,4 +1,6 @@
-const Builder = @import("std").build.Builder;
+const std = @import("std");
+const Builder = std.build.Builder;
+const mem = std.mem;
 
 pub fn build(b: *Builder) void {
     const target = b.standardTargetOptions(.{});
@@ -19,6 +21,13 @@ pub fn build(b: *Builder) void {
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
+    }
+
+    if (b.env_map.get("INCLUDE")) |entry| {
+        var it = mem.split(entry, ";");
+        while (it.next()) |path| {
+            exe.addIncludeDir(path);
+        }
     }
 
     const run_step = b.step("run", "Run the app");

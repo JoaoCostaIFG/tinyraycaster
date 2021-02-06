@@ -9,6 +9,6 @@ pub const Sprite = struct {
     }
 };
 
-pub fn cmp(constext: void, l: Sprite, r: Sprite) bool {
+pub fn desc(constext: void, l: Sprite, r: Sprite) bool {
     return !l.isCloser(&r);
 }

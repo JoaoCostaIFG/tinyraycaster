@@ -158,12 +158,11 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
         sprite.player_dist = math.sqrt(math.pow(f32, player.x - sprite.x, 2) +
             math.pow(f32, player.y - sprite.y, 2));
     }
-    std.sort.sort(Sprite.Sprite, sprites.items, {}, Sprite.cmp);
+    std.sort.sort(Sprite.Sprite, sprites.items, {}, Sprite.desc);
 
     i = 0;
     while (i < sprites.items.len) : (i += 1) {
         const sprite = &sprites.items[i];
-        std.debug.print("{}\n", .{sprite.player_dist});
         // show sprite on the map
         fb.drawRectangle(
             @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
@@ -203,12 +202,9 @@ pub fn main() !u8 {
     var player = Player{
         .x = 3.456,
         .y = 2.345,
-        .speed = 0.1,
-        .angle = 1.523,
+        .angle = math.pi / 2.0,
         .fov = math.pi / 3.0,
     };
-
-    try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
 
     // SDL2
     _ = c.SDL_Init(c.SDL_INIT_VIDEO);
@@ -223,10 +219,11 @@ pub fn main() !u8 {
         0,
     );
     // cursor options
-    _ = c.SDL_ShowCursor(c.SDL_DISABLE);
-    _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
+    // _ = c.SDL_ShowCursor(c.SDL_DISABLE);
+    // _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
-    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC);
+    // TODO c.SDL_RENDERER_PRESENTVSYNC makes input slow
+    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED);
     var texture: ?*c.SDL_Texture =
         c.SDL_CreateTexture(
         renderer.?,
@@ -236,34 +233,41 @@ pub fn main() !u8 {
         @intCast(c_int, framebuffer.h),
     );
 
+    try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
+    _ = c.SDL_UpdateTexture(
+        texture.?,
+        null,
+        framebuffer.buffer.ptr,
+        @intCast(c_int, framebuffer.w) * @sizeOf(u32),
+    );
+
     var quit: bool = false;
     var event: c.SDL_Event = undefined;
     while (!quit) {
-        _ = c.SDL_UpdateTexture(
-            texture.?,
-            null,
-            framebuffer.buffer.ptr,
-            @intCast(c_int, framebuffer.w) * @sizeOf(u32),
-        );
-
         _ = c.SDL_WaitEvent(&event);
         switch (event.type) {
             c.SDL_KEYDOWN => {
                 switch (event.key.keysym.sym) {
                     c.SDLK_w => {
-                        player.up();
+                        player.front();
                     },
                     c.SDLK_s => {
-                        player.down();
+                        player.back();
                     },
                     c.SDLK_a => {
-                        player.left();
+                        player.lookLeft();
                     },
                     c.SDLK_d => {
-                        player.right();
+                        player.lookRight();
                     },
                     c.SDLK_n => {
                         try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
+                        _ = c.SDL_UpdateTexture(
+                            texture.?,
+                            null,
+                            framebuffer.buffer.ptr,
+                            @intCast(c_int, framebuffer.w) * @sizeOf(u32),
+                        );
                     },
                     c.SDLK_PRINTSCREEN => {
                         log.info("Print screen.", .{});
