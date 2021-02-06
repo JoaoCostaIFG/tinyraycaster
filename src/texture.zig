@@ -13,7 +13,7 @@ pub const Texture = struct {
     tex: []u32 = undefined,
 
     pub fn destructor(self: *Texture) void {
-        const allocator = std.heap.page_allocator;
+        const allocator = std.heap.c_allocator;
         allocator.free(self.tex);
     }
 
@@ -26,7 +26,7 @@ pub const Texture = struct {
     pub fn getScaledColumn(self: *Texture, texid: usize, texcoord: usize, column_height: usize) []u32 {
         assert(texcoord < self.size and texid < self.cnt);
 
-        const allocator = std.heap.page_allocator;
+        const allocator = std.heap.c_allocator;
         var column = allocator.alloc(u32, column_height) catch unreachable;
 
         var y: usize = 0;
@@ -62,7 +62,7 @@ pub fn loadTexture(filename: [*:0]const u8) Texture {
     }
 
     // read the texture data
-    const allocator = std.heap.page_allocator;
+    const allocator = std.heap.c_allocator;
     var texture = allocator.alloc(u32, @intCast(usize, h * w)) catch {
         log.err("loadTexture: texture memory allocation failed ({s}).", .{filename});
         return Texture{ .w = 0, .h = 0, .size = 0, .cnt = 0 };

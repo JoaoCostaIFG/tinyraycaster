@@ -16,7 +16,7 @@ pub const Map = struct {
     }
 
     pub fn destructor(self: *Map) void {
-        const allocator = std.heap.page_allocator;
+        const allocator = std.heap.c_allocator;
         allocator.free(self.data);
     }
 };
@@ -30,7 +30,7 @@ pub fn readMap() Map {
     }
 
     // TODO actual return err
-    const allocator = std.heap.page_allocator;
+    const allocator = std.heap.c_allocator;
     var map = allocator.alloc(u8, map_size) catch return Map{ .w = 0, .h = 0 };
 
     var map_h: usize = 0;

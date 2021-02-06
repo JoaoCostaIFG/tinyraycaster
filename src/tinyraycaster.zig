@@ -3,6 +3,7 @@ const c = @import("c.zig");
 const ArrayList = std.ArrayList;
 const assert = std.debug.assert;
 const log = std.log;
+const math = std.math;
 
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
 const Map = @import("map.zig");
@@ -42,23 +43,73 @@ fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, cell_w: u
     }
 }
 
+fn drawSprite(sprite: *Sprite, depth_buffer: []f32, fb: *Framebuffer, player: *Player, spritestex: *Texture.Texture) void {
+    // absolute direction from the player to the sprite (in radians)
+    var sprite_dir: f32 = math.atan2(f32, sprite.y - player.y, sprite.x - player.x);
+    // remove unncesessary periods from the relative direction
+    while (sprite_dir - player.angle > math.pi) sprite_dir -= math.tau;
+    while (sprite_dir - player.angle < -math.pi) sprite_dir += math.tau;
+
+    // distance from the player to the sprite
+    const sprite_dist: f32 = math.sqrt(math.pow(f32, player.x - sprite.x, 2) + math.pow(f32, player.y - sprite.y, 2));
+    // const sprite_screen_size: usize = min(1000, fb.h/sprite_dist); // screen sprite size
+    const sprite_screen_size: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / sprite_dist); // screen sprite size
+    // the 3D view takes only a half of the framebuffer
+    const fb_w2: f32 = @intToFloat(f32, fb.w) / 2;
+    const h_offset: isize = @floatToInt(isize, (sprite_dir - player.angle) / player.fov * fb_w2 + fb_w2 / 2 -
+        @intToFloat(f32, spritestex.size / 2));
+    const v_offset: isize = @intCast(isize, fb.h / 2) - @intCast(isize, sprite_screen_size / 2);
+
+    var i: usize = 0;
+    while (i < sprite_screen_size) : (i += 1) {
+        // this sprite column is occluded
+        if (h_offset + @intCast(isize, i) < 0 or
+            h_offset + @intCast(isize, i) >= fb.w / 2 or
+            depth_buffer[@intCast(usize, h_offset + @intCast(isize, i))] < sprite_dist)
+            continue;
+
+        var j: usize = 0;
+        while (j < sprite_screen_size) : (j += 1) {
+            if (v_offset + @intCast(isize, j) < 0 or
+                v_offset + @intCast(isize, j) >= fb.h)
+                continue;
+            const color: u32 = spritestex.get(
+                i * spritestex.size / sprite_screen_size,
+                j * spritestex.size / sprite_screen_size,
+                sprite.tex_id,
+            );
+            var color_comps: [4]u8 = undefined;
+            utils.unpackColor(color, &color_comps[0], &color_comps[1], &color_comps[2], &color_comps[3]);
+            if (color_comps[3] > 128)
+                fb.setPixel(
+                    @intCast(usize, @intCast(isize, fb.w / 2) + h_offset + @intCast(isize, i)),
+                    @intCast(usize, v_offset + @intCast(isize, j)),
+                    color,
+                );
+        }
+    }
+}
+
 // TODO sprites should be anytype?
-fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, walltex: *Texture.Texture, monstertex: *Texture.Texture) void {
+fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, walltex: *Texture.Texture, monstertex: *Texture.Texture) !void {
     fb.clear(utils.packColor(255, 255, 255)); // clear the screen
 
     var i: usize = undefined;
     var j: usize = undefined;
 
     // size of one map cell on the screen
-    const cell_w: usize = fb.win_w / (map.w * 2);
-    const cell_h: usize = fb.win_h / map.h;
+    const cell_w: usize = fb.w / (map.w * 2);
+    const cell_h: usize = fb.h / map.h;
 
     drawMap(fb, map, walltex, cell_w, cell_h);
 
-    // draw the visibility cone AND the "3D" view
+    // draw the visibility cone && the 3D view
+    const allocator = std.heap.c_allocator;
+    var depth_buffer = try allocator.alloc(f32, fb.w / 2);
+    defer allocator.free(depth_buffer);
     i = 0;
-    while (i < fb.win_w / 2) : (i += 1) { // draw the visibility cone
-        const angle: f32 = player.getRayAngle(@intToFloat(f32, i), @intToFloat(f32, fb.win_w) / 2.0);
+    while (i < fb.w / 2) : (i += 1) { // draw the visibility cone
+        const angle: f32 = player.getRayAngle(@intToFloat(f32, i), @intToFloat(f32, fb.w) / 2.0);
 
         // ray marching loop
         var t: f32 = 0;
@@ -77,24 +128,25 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
             // our ray touches a wall, so draw the vertical column to create an
             // illusion of 3D
             const texid = map.get(@floatToInt(usize, x), @floatToInt(usize, y));
-            if (t * @cos(angle - player.angle) == 0) continue;
-            const column_height: usize = @floatToInt(
-                usize,
-                @intToFloat(f32, fb.win_h) / (t * @cos(angle - player.angle)),
-            );
+            const dist: f32 = t * @cos(angle - player.angle);
+            depth_buffer[i] = dist;
+
+            if (dist == 0) continue;
+            const column_height: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / dist);
 
             // draw textured wall
             const column: []u32 = walltex.getScaledColumn(texid, wallXTexcoord(walltex, x, y), column_height);
-            defer std.heap.page_allocator.free(column);
+            defer std.heap.c_allocator.free(column);
 
-            const pix_x: usize = fb.win_w / 2 + i;
+            const pix_x: usize = fb.w / 2 + i;
             j = 0;
-            while (j < column_height and j < fb.win_h) : (j += 1) {
-                const pix_y: usize = j + fb.win_h / 2 -% column_height / 2;
-                if (pix_y >= 0 and pix_y < fb.win_h)
+            while (j < column_height and j < fb.h) : (j += 1) {
+                const pix_y: usize = j + fb.h / 2 -% column_height / 2;
+                if (pix_y >= 0 and pix_y < fb.h)
                     fb.setPixel(pix_x, pix_y, column[j]);
             }
 
+            // the ray stops when it hits something
             break;
         }
     }
@@ -102,6 +154,7 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
     i = 0;
     while (i < sprites.items.len) : (i += 1) {
         const sprite = &sprites.items[i];
+        // show sprite on the map
         fb.drawRectangle(
             @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
             @floatToInt(usize, @round(sprite.y * @intToFloat(f32, cell_h) - 3)),
@@ -109,14 +162,15 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
             6,
             utils.packColor(255, 0, 0),
         );
+        drawSprite(sprite, depth_buffer, fb, player, monstertex);
     }
 }
 
 pub fn main() !u8 {
     // the image itself
     var framebuffer = Framebuffer{
-        .win_w = 1024,
-        .win_h = 512,
+        .w = 1024,
+        .h = 512,
     };
     try framebuffer.init();
     defer framebuffer.destructor();
@@ -140,10 +194,10 @@ pub fn main() !u8 {
         .y = 2.345,
         .speed = 0.1,
         .angle = 1.523,
-        .fov = std.math.pi / 3.0,
+        .fov = math.pi / 3.0,
     };
 
-    render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
+    try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
 
     // SDL2
     _ = c.SDL_Init(c.SDL_INIT_VIDEO);
@@ -153,8 +207,8 @@ pub fn main() !u8 {
         "TinyRayCaster",
         c.SDL_WINDOWPOS_UNDEFINED,
         c.SDL_WINDOWPOS_UNDEFINED,
-        @intCast(c_int, framebuffer.win_w),
-        @intCast(c_int, framebuffer.win_h),
+        @intCast(c_int, framebuffer.w),
+        @intCast(c_int, framebuffer.h),
         0,
     );
     // cursor options
@@ -167,8 +221,8 @@ pub fn main() !u8 {
         renderer.?,
         c.SDL_PIXELFORMAT_ABGR8888,
         c.SDL_TEXTUREACCESS_STREAMING,
-        @intCast(c_int, framebuffer.win_w),
-        @intCast(c_int, framebuffer.win_h),
+        @intCast(c_int, framebuffer.w),
+        @intCast(c_int, framebuffer.h),
     );
 
     var quit: bool = false;
@@ -178,7 +232,7 @@ pub fn main() !u8 {
             texture.?,
             null,
             framebuffer.buffer.ptr,
-            @intCast(c_int, framebuffer.win_w) * @sizeOf(u32),
+            @intCast(c_int, framebuffer.w) * @sizeOf(u32),
         );
 
         _ = c.SDL_WaitEvent(&event);
@@ -198,7 +252,7 @@ pub fn main() !u8 {
                         player.right();
                     },
                     c.SDLK_n => {
-                        render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
+                        try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
                     },
                     c.SDLK_PRINTSCREEN => {
                         log.info("Print screen.", .{});
