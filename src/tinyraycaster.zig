@@ -8,7 +8,7 @@ const math = std.math;
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
 const Map = @import("map.zig");
 const Player = @import("player.zig").Player;
-const Sprite = @import("sprite.zig").Sprite;
+const Sprite = @import("sprite.zig");
 const Texture = @import("texture.zig");
 const utils = @import("utils.zig");
 
@@ -43,17 +43,16 @@ fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, cell_w: u
     }
 }
 
-fn drawSprite(sprite: *Sprite, depth_buffer: []f32, fb: *Framebuffer, player: *Player, spritestex: *Texture.Texture) void {
+fn drawSprite(sprite: *Sprite.Sprite, depth_buffer: []f32, fb: *Framebuffer, player: *Player, spritestex: *Texture.Texture) void {
     // absolute direction from the player to the sprite (in radians)
     var sprite_dir: f32 = math.atan2(f32, sprite.y - player.y, sprite.x - player.x);
     // remove unncesessary periods from the relative direction
     while (sprite_dir - player.angle > math.pi) sprite_dir -= math.tau;
     while (sprite_dir - player.angle < -math.pi) sprite_dir += math.tau;
 
-    // distance from the player to the sprite
-    const sprite_dist: f32 = math.sqrt(math.pow(f32, player.x - sprite.x, 2) + math.pow(f32, player.y - sprite.y, 2));
-    // const sprite_screen_size: usize = min(1000, fb.h/sprite_dist); // screen sprite size
-    const sprite_screen_size: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / sprite_dist); // screen sprite size
+    // screen sprite size
+    var sprite_screen_size: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / sprite.player_dist);
+    if (sprite_screen_size > 1000) sprite_screen_size = 1000; // cap sprite size
     // the 3D view takes only a half of the framebuffer
     const fb_w2: f32 = @intToFloat(f32, fb.w) / 2;
     const h_offset: isize = @floatToInt(isize, (sprite_dir - player.angle) / player.fov * fb_w2 + fb_w2 / 2 -
@@ -65,7 +64,7 @@ fn drawSprite(sprite: *Sprite, depth_buffer: []f32, fb: *Framebuffer, player: *P
         // this sprite column is occluded
         if (h_offset + @intCast(isize, i) < 0 or
             h_offset + @intCast(isize, i) >= fb.w / 2 or
-            depth_buffer[@intCast(usize, h_offset + @intCast(isize, i))] < sprite_dist)
+            depth_buffer[@intCast(usize, h_offset + @intCast(isize, i))] < sprite.player_dist)
             continue;
 
         var j: usize = 0;
@@ -151,9 +150,20 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
         }
     }
 
+    // sort sprites
     i = 0;
     while (i < sprites.items.len) : (i += 1) {
         const sprite = &sprites.items[i];
+        // distance from the player to the sprite
+        sprite.player_dist = math.sqrt(math.pow(f32, player.x - sprite.x, 2) +
+            math.pow(f32, player.y - sprite.y, 2));
+    }
+    std.sort.sort(Sprite.Sprite, sprites.items, {}, Sprite.cmp);
+
+    i = 0;
+    while (i < sprites.items.len) : (i += 1) {
+        const sprite = &sprites.items[i];
+        std.debug.print("{}\n", .{sprite.player_dist});
         // show sprite on the map
         fb.drawRectangle(
             @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
@@ -180,11 +190,12 @@ pub fn main() !u8 {
     var monstertex = Texture.loadTexture("assets/monsters.png");
     defer monstertex.destructor();
     // sprites
-    var sprites = ArrayList(Sprite).init(std.heap.c_allocator);
+    var sprites = ArrayList(Sprite.Sprite).init(std.heap.c_allocator);
     defer sprites.deinit();
-    try sprites.append(Sprite{ .x = 1.834, .y = 8.765, .tex_id = 0 });
-    try sprites.append(Sprite{ .x = 5.323, .y = 5.365, .tex_id = 1 });
-    try sprites.append(Sprite{ .x = 4.123, .y = 10.265, .tex_id = 1 });
+    try sprites.append(Sprite.Sprite{ .x = 3.523, .y = 3.812, .tex_id = 2 });
+    try sprites.append(Sprite.Sprite{ .x = 1.834, .y = 8.765, .tex_id = 0 });
+    try sprites.append(Sprite.Sprite{ .x = 5.323, .y = 5.365, .tex_id = 1 });
+    try sprites.append(Sprite.Sprite{ .x = 4.123, .y = 10.265, .tex_id = 1 });
     // read map
     var map = Map.readMap();
     defer map.destructor();
