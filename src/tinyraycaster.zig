@@ -4,6 +4,7 @@ const ArrayList = std.ArrayList;
 const assert = std.debug.assert;
 const log = std.log;
 const math = std.math;
+const Thread = std.Thread;
 
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
 const Map = @import("map.zig");
@@ -13,6 +14,8 @@ const Texture = @import("texture.zig");
 const utils = @import("utils.zig");
 
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
+
+var quit: bool = false;
 
 fn wallXTexcoord(walltex: *Texture.Texture, hitx: f32, hity: f32) usize {
     const x: f32 = hitx - @floor(hitx + 0.5); // hitx and hity contain (signed) fractional parts of cx and cy,
@@ -89,8 +92,7 @@ fn drawSprite(sprite: *Sprite.Sprite, depth_buffer: []f32, fb: *Framebuffer, pla
     }
 }
 
-// TODO sprites should be anytype?
-fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, walltex: *Texture.Texture, monstertex: *Texture.Texture) !void {
+fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sprite, walltex: *Texture.Texture, monstertex: *Texture.Texture) !void {
     fb.clear(utils.packColor(255, 255, 255)); // clear the screen
 
     var i: usize = undefined;
@@ -152,17 +154,17 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
 
     // sort sprites
     i = 0;
-    while (i < sprites.items.len) : (i += 1) {
-        const sprite = &sprites.items[i];
+    while (i < sprites.len) : (i += 1) {
+        const sprite = &sprites[i];
         // distance from the player to the sprite
         sprite.player_dist = math.sqrt(math.pow(f32, player.x - sprite.x, 2) +
             math.pow(f32, player.y - sprite.y, 2));
     }
-    std.sort.sort(Sprite.Sprite, sprites.items, {}, Sprite.desc);
+    std.sort.sort(Sprite.Sprite, sprites, {}, Sprite.desc);
 
     i = 0;
-    while (i < sprites.items.len) : (i += 1) {
-        const sprite = &sprites.items[i];
+    while (i < sprites.len) : (i += 1) {
+        const sprite = &sprites[i];
         // show sprite on the map
         fb.drawRectangle(
             @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
@@ -172,6 +174,37 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: anytype, wa
             utils.packColor(255, 0, 0),
         );
         drawSprite(sprite, depth_buffer, fb, player, monstertex);
+    }
+}
+
+const Args = struct {
+    fb: *Framebuffer,
+    map: *Map.Map,
+    player: *Player,
+    sprites: []Sprite.Sprite,
+    walltex: *Texture.Texture,
+    monstertex: *Texture.Texture,
+    sdlRenderer: ?*c.SDL_Renderer,
+    sdlTexture: ?*c.SDL_Texture,
+};
+
+fn renderLoop(args: Args) void {
+    const fps = 30;
+
+    while (!quit) {
+        render(args.fb, args.map, args.player, args.sprites, args.walltex, args.monstertex) catch continue;
+        _ = c.SDL_UpdateTexture(
+            args.sdlTexture.?,
+            null,
+            args.fb.buffer.ptr,
+            @intCast(c_int, args.fb.w) * @sizeOf(u32),
+        );
+
+        _ = c.SDL_RenderClear(args.sdlRenderer.?);
+        _ = c.SDL_RenderCopy(args.sdlRenderer.?, args.sdlTexture.?, null, null);
+        c.SDL_RenderPresent(args.sdlRenderer.?);
+
+        std.time.sleep(std.time.ns_per_s / 30);
     }
 }
 
@@ -223,7 +256,7 @@ pub fn main() !u8 {
     // _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
     // TODO c.SDL_RENDERER_PRESENTVSYNC makes input slow
-    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED);
+    var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC);
     var texture: ?*c.SDL_Texture =
         c.SDL_CreateTexture(
         renderer.?,
@@ -233,15 +266,17 @@ pub fn main() !u8 {
         @intCast(c_int, framebuffer.h),
     );
 
-    try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
-    _ = c.SDL_UpdateTexture(
-        texture.?,
-        null,
-        framebuffer.buffer.ptr,
-        @intCast(c_int, framebuffer.w) * @sizeOf(u32),
-    );
+    var renderThread = try Thread.spawn(Args{
+        .fb = &framebuffer,
+        .map = &map,
+        .player = &player,
+        .sprites = sprites.items,
+        .walltex = &walltex,
+        .monstertex = &monstertex,
+        .sdlRenderer = renderer,
+        .sdlTexture = texture,
+    }, renderLoop);
 
-    var quit: bool = false;
     var event: c.SDL_Event = undefined;
     while (!quit) {
         _ = c.SDL_WaitEvent(&event);
@@ -259,15 +294,6 @@ pub fn main() !u8 {
                     },
                     c.SDLK_d => {
                         player.lookRight();
-                    },
-                    c.SDLK_n => {
-                        try render(&framebuffer, &map, &player, &sprites, &walltex, &monstertex);
-                        _ = c.SDL_UpdateTexture(
-                            texture.?,
-                            null,
-                            framebuffer.buffer.ptr,
-                            @intCast(c_int, framebuffer.w) * @sizeOf(u32),
-                        );
                     },
                     c.SDLK_PRINTSCREEN => {
                         log.info("Print screen.", .{});
@@ -289,12 +315,11 @@ pub fn main() !u8 {
             },
             else => {},
         }
-
-        _ = c.SDL_RenderClear(renderer.?);
-        _ = c.SDL_RenderCopy(renderer.?, texture.?, null, null);
-        c.SDL_RenderPresent(renderer.?);
     }
 
+    renderThread.wait();
+
+    // SDL cleanup
     c.SDL_DestroyTexture(texture.?);
     c.SDL_DestroyRenderer(renderer.?);
     c.SDL_DestroyWindow(window.?);
