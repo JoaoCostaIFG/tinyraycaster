@@ -155,12 +155,12 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sp
             const column: []u32 = walltex.getScaledColumn(texid, wallXTexcoord(walltex, x, y), column_height);
             defer std.heap.c_allocator.free(column);
 
-            const pix_x: usize = fb.w / 2 + i;
+            const pix_x: usize = fb.w / 2 + i; // drawing at the right side of the scrren => +fb.w/2
             j = 0;
-            while (j < column_height and j < fb.h) : (j += 1) {
-                const pix_y: usize = j + fb.h / 2 -% column_height / 2;
+            while (j < column_height) : (j += 1) { //  and j < fb.h
+                const pix_y: isize = @intCast(isize, j + fb.h / 2) - column_height / 2;
                 if (pix_y >= 0 and pix_y < fb.h)
-                    fb.setPixel(pix_x, pix_y, column[j]);
+                    fb.setPixel(pix_x, @intCast(usize, pix_y), column[j]);
             }
 
             // the ray stops when it hits something

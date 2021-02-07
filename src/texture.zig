@@ -25,7 +25,6 @@ pub const Texture = struct {
     // TODO txcoord usize instead of isize?
     pub fn getScaledColumn(self: *Texture, texid: usize, texcoord: usize, column_height: usize) []u32 {
         assert(texcoord < self.size and texid < self.cnt);
-
         const allocator = std.heap.c_allocator;
         var column = allocator.alloc(u32, column_height) catch unreachable;
 
