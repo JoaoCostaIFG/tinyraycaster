@@ -13,8 +13,8 @@ pub const Player = struct {
     }
 
     pub fn front(self: *Player) void {
-        self.x += @cos(self.angle) * self.speed;
-        self.y += @sin(self.angle) * self.speed;
+        self.x += @sin(self.angle) * self.speed;
+        self.y += @cos(self.angle) * self.speed;
         self.normalizePos();
     }
 
@@ -24,17 +24,17 @@ pub const Player = struct {
         self.normalizePos();
     }
 
+    fn normalizePos(self: *Player) void {
+        if (self.x < 0) self.x = 0;
+        if (self.y < 0) self.y = 0;
+    }
+
     pub fn lookLeft(self: *Player) void {
         self.angle -= self.a_speed;
     }
 
     pub fn lookRight(self: *Player) void {
         self.angle += self.a_speed;
-    }
-
-    fn normalizePos(self: *Player) void {
-        if (self.x < 0) self.x = 0;
-        if (self.y < 0) self.y = 0;
     }
 
     pub fn move(self: *Player, moveDirection: Direction) void {
