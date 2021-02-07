@@ -41,49 +41,53 @@ const GameState = struct {
     sdlTexture: ?*c.SDL_Texture,
 };
 
+fn move(player: *Player) void {
+    // movement and camera
+    // TODO deltatime
+    var move: i8 = @enumToInt(Direction.stop);
+    if (kbd[0]) move += @enumToInt(Direction.front);
+    if (kbd[1]) move += @enumToInt(Direction.back);
+    if (kbd[2]) move += @enumToInt(Direction.left);
+    if (kbd[3]) move += @enumToInt(Direction.right);
+
+    switch (@intToEnum(Direction, move)) {
+        Direction.front => {
+            gs.player.front();
+        },
+        Direction.back => {
+            gs.player.back();
+        },
+        Direction.left => {
+            gs.player.lookLeft();
+        },
+        Direction.right => {
+            gs.player.lookRight();
+        },
+        Direction.lfront => {
+            gs.player.front();
+            gs.player.lookLeft();
+        },
+        Direction.rfront => {
+            gs.player.front();
+            gs.player.lookRight();
+        },
+        Direction.lback => {
+            gs.player.back();
+            gs.player.lookLeft();
+        },
+        Direction.rback => {
+            gs.player.back();
+            gs.player.lookRight();
+        },
+        else => {},
+    }
+}
+
 fn renderLoop(gs: GameState) void {
     const fps = 60;
 
     while (!quit) {
-        // movement and camera
-        // TODO deltatime
-        var move: i8 = @enumToInt(Direction.stop);
-        if (kbd[0]) move += @enumToInt(Direction.front);
-        if (kbd[1]) move += @enumToInt(Direction.back);
-        if (kbd[2]) move += @enumToInt(Direction.left);
-        if (kbd[3]) move += @enumToInt(Direction.right);
-
-        switch (@intToEnum(Direction, move)) {
-            Direction.front => {
-                gs.player.front();
-            },
-            Direction.back => {
-                gs.player.back();
-            },
-            Direction.left => {
-                gs.player.lookLeft();
-            },
-            Direction.right => {
-                gs.player.lookRight();
-            },
-            Direction.lfront => {
-                gs.player.front();
-                gs.player.lookLeft();
-            },
-            Direction.rfront => {
-                gs.player.front();
-                gs.player.lookRight();
-            },
-            Direction.lback => {
-                gs.player.back();
-                gs.player.lookLeft();
-            },
-            Direction.rback => {
-                gs.player.back();
-                gs.player.lookRight();
-            },
-            else => {},
-        }
+        move(gs.player);
 
         // sort sprites
         var i: usize = 0;
