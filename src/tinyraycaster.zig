@@ -148,21 +148,20 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sp
 
             if (dist == 0) continue; // avoid division by 0 (inside walls)
             var column_height: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / dist);
-            // if (column_height > fb.h) column_height = fb.h; // cap column height to framebuffer height
+            // cap column height to 2000. The higher the number, the closer we can get to walls without distortion
             if (column_height > 2000) column_height = 2000;
 
             // draw textured wall
             const column: []u32 = walltex.getScaledColumn(texid, wallXTexcoord(walltex, x, y), column_height);
             defer std.heap.c_allocator.free(column);
-
             const pix_x: usize = fb.w / 2 + i; // drawing at the right side of the scrren => +fb.w/2
             j = 0;
             while (j < column_height) : (j += 1) { //  and j < fb.h
-                const pix_y: isize = @intCast(isize, j + fb.h / 2) - column_height / 2;
+                const pix_y: isize = @intCast(isize, j + fb.h / 2) - @intCast(isize, column_height / 2);
+                // we won't draw position outside framebuffer
                 if (pix_y >= 0 and pix_y < fb.h)
                     fb.setPixel(pix_x, @intCast(usize, pix_y), column[j]);
             }
-
             // the ray stops when it hits something
             break;
         }
