@@ -36,4 +36,50 @@ pub const Player = struct {
         if (self.x < 0) self.x = 0;
         if (self.y < 0) self.y = 0;
     }
+
+    pub fn move(self: *Player, moveDirection: Direction) void {
+        switch (moveDirection) {
+            Direction.front => {
+                self.front();
+            },
+            Direction.back => {
+                self.back();
+            },
+            Direction.left => {
+                self.lookLeft();
+            },
+            Direction.right => {
+                self.lookRight();
+            },
+            Direction.lfront => {
+                self.front();
+                self.lookLeft();
+            },
+            Direction.rfront => {
+                self.front();
+                self.lookRight();
+            },
+            Direction.lback => {
+                self.back();
+                self.lookLeft();
+            },
+            Direction.rback => {
+                self.back();
+                self.lookRight();
+            },
+            else => {},
+        }
+    }
+};
+
+pub const Direction = enum(i8) {
+    stop = 0,
+    front = 2,
+    back = -2,
+    left = -3,
+    right = 3,
+    lfront = -1,
+    rfront = 5,
+    lback = -5,
+    rback = 1,
 };

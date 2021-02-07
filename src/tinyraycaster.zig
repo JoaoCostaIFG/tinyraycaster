@@ -8,7 +8,7 @@ const c = @import("c.zig");
 
 const Framebuffer = @import("framebuffer.zig").Framebuffer;
 const Map = @import("map.zig");
-const Player = @import("player.zig").Player;
+const Player = @import("player.zig");
 const render = @import("render.zig").render;
 const Sprite = @import("sprite.zig");
 const Texture = @import("texture.zig");
@@ -16,24 +16,10 @@ const utils = @import("utils.zig");
 
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
 
-var quit: bool = false;
-const Direction = enum(i8) {
-    stop = 0,
-    front = 2,
-    back = -2,
-    left = -3,
-    right = 3,
-    lfront = -1,
-    rfront = 5,
-    lback = -5,
-    rback = 1,
-};
-var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
-
 const GameState = struct {
     fb: *Framebuffer,
     map: *Map.Map,
-    player: *Player,
+    player: *Player.Player,
     sprites: *ArrayList(Sprite.Sprite),
     walltex: *Texture.Texture,
     monstertex: *Texture.Texture,
@@ -41,53 +27,26 @@ const GameState = struct {
     sdlTexture: ?*c.SDL_Texture,
 };
 
-fn move(player: *Player) void {
+var quit: bool = false;
+var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
+
+fn movePlayer(player: *Player.Player) void {
     // movement and camera
     // TODO deltatime
-    var move: i8 = @enumToInt(Direction.stop);
-    if (kbd[0]) move += @enumToInt(Direction.front);
-    if (kbd[1]) move += @enumToInt(Direction.back);
-    if (kbd[2]) move += @enumToInt(Direction.left);
-    if (kbd[3]) move += @enumToInt(Direction.right);
+    var move: i8 = @enumToInt(Player.Direction.stop);
+    if (kbd[0]) move += @enumToInt(Player.Direction.front);
+    if (kbd[1]) move += @enumToInt(Player.Direction.back);
+    if (kbd[2]) move += @enumToInt(Player.Direction.left);
+    if (kbd[3]) move += @enumToInt(Player.Direction.right);
 
-    switch (@intToEnum(Direction, move)) {
-        Direction.front => {
-            gs.player.front();
-        },
-        Direction.back => {
-            gs.player.back();
-        },
-        Direction.left => {
-            gs.player.lookLeft();
-        },
-        Direction.right => {
-            gs.player.lookRight();
-        },
-        Direction.lfront => {
-            gs.player.front();
-            gs.player.lookLeft();
-        },
-        Direction.rfront => {
-            gs.player.front();
-            gs.player.lookRight();
-        },
-        Direction.lback => {
-            gs.player.back();
-            gs.player.lookLeft();
-        },
-        Direction.rback => {
-            gs.player.back();
-            gs.player.lookRight();
-        },
-        else => {},
-    }
+    player.move(@intToEnum(Player.Direction, move));
 }
 
 fn renderLoop(gs: GameState) void {
     const fps = 60;
 
     while (!quit) {
-        move(gs.player);
+        movePlayer(gs.player);
 
         // sort sprites
         var i: usize = 0;
@@ -136,12 +95,11 @@ pub fn main() !u8 {
     try sprites.append(Sprite.Sprite{ .x = 5.323, .y = 5.365, .tex_id = 1 });
     try sprites.append(Sprite.Sprite{ .x = 14.32, .y = 13.36, .tex_id = 3 });
     try sprites.append(Sprite.Sprite{ .x = 4.123, .y = 10.76, .tex_id = 1 });
-
     // read map
     var map = Map.readMap();
     defer map.destructor();
     // player options
-    var player = Player{
+    var player = Player.Player{
         .x = 3.456,
         .y = 2.345,
         .angle = math.pi / 2.0,
