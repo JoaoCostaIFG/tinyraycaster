@@ -10,3 +10,4 @@ https://github.com/nothings/stb
 - funcs with coords recebem anytype e arrendondam inside se for float, etc..
 - mapa sem paredes => olhar para o infinito
 - Error unions on obj creation functions + errdefer for cleanup on error
+- use SDL for print screens

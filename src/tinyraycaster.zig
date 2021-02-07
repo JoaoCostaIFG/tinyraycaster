@@ -17,6 +17,18 @@ const utils = @import("utils.zig");
 pub extern "c" fn SDL_SetRelativeMouseMode(enabled: c_int) c_int;
 
 var quit: bool = false;
+const Direction = enum(i8) {
+    stop = 0,
+    front = 2,
+    back = -2,
+    left = -3,
+    right = 3,
+    lfront = -1,
+    rfront = 5,
+    lback = -5,
+    rback = 1,
+};
+var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
 
 const GameState = struct {
     fb: *Framebuffer,
@@ -33,6 +45,46 @@ fn renderLoop(gs: GameState) void {
     const fps = 60;
 
     while (!quit) {
+        // movement and camera
+        // TODO deltatime
+        var move: i8 = @enumToInt(Direction.stop);
+        if (kbd[0]) move += @enumToInt(Direction.front);
+        if (kbd[1]) move += @enumToInt(Direction.back);
+        if (kbd[2]) move += @enumToInt(Direction.left);
+        if (kbd[3]) move += @enumToInt(Direction.right);
+
+        switch (@intToEnum(Direction, move)) {
+            Direction.front => {
+                gs.player.front();
+            },
+            Direction.back => {
+                gs.player.back();
+            },
+            Direction.left => {
+                gs.player.lookLeft();
+            },
+            Direction.right => {
+                gs.player.lookRight();
+            },
+            Direction.lfront => {
+                gs.player.front();
+                gs.player.lookLeft();
+            },
+            Direction.rfront => {
+                gs.player.front();
+                gs.player.lookRight();
+            },
+            Direction.lback => {
+                gs.player.back();
+                gs.player.lookLeft();
+            },
+            Direction.rback => {
+                gs.player.back();
+                gs.player.lookRight();
+            },
+            else => {},
+        }
+
         // sort sprites
         var i: usize = 0;
         while (i < gs.sprites.items.len) : (i += 1) {
@@ -55,7 +107,7 @@ fn renderLoop(gs: GameState) void {
         _ = c.SDL_RenderCopy(gs.sdlRenderer.?, gs.sdlTexture.?, null, null);
         c.SDL_RenderPresent(gs.sdlRenderer.?);
 
-        std.time.sleep(std.time.ns_per_s / 30);
+        std.time.sleep(std.time.ns_per_s / fps);
     }
 }
 
@@ -137,16 +189,16 @@ pub fn main() !u8 {
             c.SDL_KEYDOWN => {
                 switch (event.key.keysym.sym) {
                     c.SDLK_w => {
-                        player.front();
+                        kbd[0] = true;
                     },
                     c.SDLK_s => {
-                        player.back();
+                        kbd[1] = true;
                     },
                     c.SDLK_a => {
-                        player.lookLeft();
+                        kbd[2] = true;
                     },
                     c.SDLK_d => {
-                        player.lookRight();
+                        kbd[3] = true;
                     },
                     c.SDLK_PRINTSCREEN => {
                         log.info("Print screen.", .{});
@@ -156,6 +208,23 @@ pub fn main() !u8 {
                     },
                     c.SDLK_q, c.SDLK_ESCAPE => {
                         quit = true;
+                    },
+                    else => {},
+                }
+            },
+            c.SDL_KEYUP => {
+                switch (event.key.keysym.sym) {
+                    c.SDLK_w => {
+                        kbd[0] = false;
+                    },
+                    c.SDLK_s => {
+                        kbd[1] = false;
+                    },
+                    c.SDLK_a => {
+                        kbd[2] = false;
+                    },
+                    c.SDLK_d => {
+                        kbd[3] = false;
                     },
                     else => {},
                 }
