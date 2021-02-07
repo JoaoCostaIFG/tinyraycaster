@@ -88,7 +88,7 @@ pub fn main() !u8 {
     var player = Player{
         .x = 3.456,
         .y = 2.345,
-        .angle = 1.523, //math.pi / 2.0
+        .angle = math.pi / 2.0,
         .fov = math.pi / 3.0,
     };
 
