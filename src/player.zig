@@ -13,14 +13,26 @@ pub const Player = struct {
     }
 
     pub fn front(self: *Player) void {
-        self.x += @sin(self.angle) * self.speed;
-        self.y += @cos(self.angle) * self.speed;
+        self.x += @cos(self.angle) * self.speed;
+        self.y += @sin(self.angle) * self.speed;
         self.normalizePos();
     }
 
     pub fn back(self: *Player) void {
         self.x -= @cos(self.angle) * self.speed;
         self.y -= @sin(self.angle) * self.speed;
+        self.normalizePos();
+    }
+
+    pub fn left(self: *Player) void {
+        self.x += @sin(self.angle) * self.speed;
+        self.y += @cos(self.angle) * self.speed;
+        self.normalizePos();
+    }
+
+    pub fn right(self: *Player) void {
+        self.x -= @sin(self.angle) * self.speed;
+        self.y -= @cos(self.angle) * self.speed;
         self.normalizePos();
     }
 
@@ -46,26 +58,26 @@ pub const Player = struct {
                 self.back();
             },
             Direction.left => {
-                self.lookLeft();
+                self.left();
             },
             Direction.right => {
-                self.lookRight();
+                self.right();
             },
             Direction.lfront => {
                 self.front();
-                self.lookLeft();
+                self.left();
             },
             Direction.rfront => {
                 self.front();
-                self.lookRight();
+                self.right();
             },
             Direction.lback => {
                 self.back();
-                self.lookLeft();
+                self.left();
             },
             Direction.rback => {
                 self.back();
-                self.lookRight();
+                self.right();
             },
             else => {},
         }
