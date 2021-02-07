@@ -29,6 +29,7 @@ const GameState = struct {
 
 var quit: bool = false;
 var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
+var mouse = [_]i32{ 0, 0 }; // left, right
 
 fn movePlayer(player: *Player.Player) void {
     // movement and camera
@@ -47,6 +48,9 @@ fn renderLoop(gs: GameState) void {
 
     while (!quit) {
         movePlayer(gs.player);
+        std.debug.print("mouse move {} {}\n", .{ mouse[0], mouse[1] });
+        gs.player.look(@divFloor(mouse[0], 10));
+        mouse[0] = 0;
 
         // sort sprites
         var i: usize = 0;
@@ -104,6 +108,7 @@ pub fn main() !u8 {
         .y = 2.345,
         .angle = math.pi / 2.0,
         .fov = math.pi / 3.0,
+        .a_speed = math.pi / 100.0,
     };
 
     // SDL2
@@ -118,9 +123,8 @@ pub fn main() !u8 {
         @intCast(c_int, framebuffer.h),
         0,
     );
-    // cursor options
-    // _ = c.SDL_ShowCursor(c.SDL_DISABLE);
-    // _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
+    // don't show mouse cursor and select relative mouse input
+    _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
     // TODO c.SDL_RENDERER_PRESENTVSYNC makes input slow (needs confirm ?)
     var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC);
@@ -192,7 +196,8 @@ pub fn main() !u8 {
                 }
             },
             c.SDL_MOUSEMOTION => {
-                // std.debug.print("mouse move {} {}\n", .{ event.motion.xrel, event.motion.yrel });
+                mouse[0] += event.motion.xrel;
+                mouse[1] += event.motion.yrel;
             },
             c.SDL_QUIT => {
                 quit = true;

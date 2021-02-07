@@ -4,7 +4,7 @@ pub const Player = struct {
     x: f32 = 0.0,
     y: f32 = 0.0,
     speed: f32 = 0.1, // distance traveled in each step
-    a_speed: f32 = 0.05, // angle turning step
+    a_speed: f32 = math.pi / 60.0, // angle turning step
     angle: f32 = 0.0, // player view direction
     fov: f32 = math.pi / 3.0, // field of view
 
@@ -41,12 +41,8 @@ pub const Player = struct {
         if (self.y < 0) self.y = 0;
     }
 
-    pub fn lookLeft(self: *Player) void {
-        self.angle -= self.a_speed;
-    }
-
-    pub fn lookRight(self: *Player) void {
-        self.angle += self.a_speed;
+    pub fn look(self: *Player, amount: i32) void {
+        self.angle += self.a_speed * @intToFloat(f32, amount);
     }
 
     pub fn move(self: *Player, moveDirection: Direction) void {
