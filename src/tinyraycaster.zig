@@ -106,7 +106,7 @@ fn drawSprite(sprite: *Sprite.Sprite, depth_buffer: []f32, fb: *Framebuffer, pla
     }
 }
 
-fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sprite, walltex: *Texture.Texture, monstertex: *Texture.Texture) !void {
+fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: *ArrayList(Sprite.Sprite), walltex: *Texture.Texture, monstertex: *Texture.Texture) !void {
     fb.clear(utils.packColor(255, 255, 255)); // clear the screen
 
     var i: usize = undefined;
@@ -168,50 +168,50 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sp
     }
 
     i = 0;
-    while (i < sprites.len) : (i += 1) {
-        const sprite = &sprites[i];
+    while (i < sprites.items.len) : (i += 1) {
+        const sprite = &sprites.items[i];
         drawSprite(sprite, depth_buffer, fb, player, monstertex);
     }
 
-    drawMap(fb, map, walltex, sprites, cell_w, cell_h);
+    drawMap(fb, map, walltex, sprites.items, cell_w, cell_h);
 }
 
-const Args = struct {
+const GameState = struct {
     fb: *Framebuffer,
     map: *Map.Map,
     player: *Player,
-    sprites: []Sprite.Sprite,
+    sprites: *ArrayList(Sprite.Sprite),
     walltex: *Texture.Texture,
     monstertex: *Texture.Texture,
     sdlRenderer: ?*c.SDL_Renderer,
     sdlTexture: ?*c.SDL_Texture,
 };
 
-fn renderLoop(args: Args) void {
+fn renderLoop(gs: GameState) void {
     const fps = 60;
 
     while (!quit) {
         // sort sprites
         var i: usize = 0;
-        while (i < args.sprites.len) : (i += 1) {
-            const sprite = &args.sprites[i];
+        while (i < gs.sprites.items.len) : (i += 1) {
+            const sprite = &gs.sprites.items[i];
             // distance from the player to the sprite
-            sprite.player_dist = math.sqrt(math.pow(f32, args.player.x - sprite.x, 2) +
-                math.pow(f32, args.player.y - sprite.y, 2));
+            sprite.player_dist = math.sqrt(math.pow(f32, gs.player.x - sprite.x, 2) +
+                math.pow(f32, gs.player.y - sprite.y, 2));
         }
-        std.sort.sort(Sprite.Sprite, args.sprites, {}, Sprite.desc);
+        std.sort.sort(Sprite.Sprite, gs.sprites.items, {}, Sprite.desc);
 
-        render(args.fb, args.map, args.player, args.sprites, args.walltex, args.monstertex) catch continue;
+        render(gs.fb, gs.map, gs.player, gs.sprites, gs.walltex, gs.monstertex) catch continue;
         _ = c.SDL_UpdateTexture(
-            args.sdlTexture.?,
+            gs.sdlTexture.?,
             null,
-            args.fb.buffer.ptr,
-            @intCast(c_int, args.fb.w) * @sizeOf(u32),
+            gs.fb.buffer.ptr,
+            @intCast(c_int, gs.fb.w) * @sizeOf(u32),
         );
 
-        _ = c.SDL_RenderClear(args.sdlRenderer.?);
-        _ = c.SDL_RenderCopy(args.sdlRenderer.?, args.sdlTexture.?, null, null);
-        c.SDL_RenderPresent(args.sdlRenderer.?);
+        _ = c.SDL_RenderClear(gs.sdlRenderer.?);
+        _ = c.SDL_RenderCopy(gs.sdlRenderer.?, gs.sdlTexture.?, null, null);
+        c.SDL_RenderPresent(gs.sdlRenderer.?);
 
         std.time.sleep(std.time.ns_per_s / 30);
     }
@@ -277,11 +277,11 @@ pub fn main() !u8 {
         @intCast(c_int, framebuffer.h),
     );
 
-    var renderThread = try Thread.spawn(Args{
+    var renderThread = try Thread.spawn(GameState{
         .fb = &framebuffer,
         .map = &map,
         .player = &player,
-        .sprites = sprites.items,
+        .sprites = &sprites,
         .walltex = &walltex,
         .monstertex = &monstertex,
         .sdlRenderer = renderer,
