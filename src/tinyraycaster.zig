@@ -32,7 +32,7 @@ fn wallXTexcoord(walltex: *Texture.Texture, hitx: f32, hity: f32) usize {
     return @intCast(usize, x_texcoord);
 }
 
-fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, cell_w: usize, cell_h: usize) void {
+fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, sprites: []Sprite.Sprite, cell_w: usize, cell_h: usize) void {
     var i: usize = 0;
     while (i < map.h) : (i += 1) {
         var j: usize = 0;
@@ -41,8 +41,22 @@ fn drawMap(fb: *Framebuffer, map: *Map.Map, walltex: *Texture.Texture, cell_w: u
             const rect_x: usize = j * cell_w;
             const rect_y: usize = i * cell_h;
             const texid: u32 = map.get(j, i);
+            // the color is taken from the first (upper left) pixel of the texture, texid
             fb.drawRectangle(rect_x, rect_y, cell_w, cell_h, walltex.get(0, 0, texid));
         }
+    }
+
+    // show sprite on the map
+    i = 0;
+    while (i < sprites.len) : (i += 1) {
+        const sprite = &sprites[i];
+        fb.drawRectangle(
+            @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
+            @floatToInt(usize, @round(sprite.y * @intToFloat(f32, cell_h) - 3)),
+            6,
+            6,
+            utils.packColor(255, 0, 0),
+        );
     }
 }
 
@@ -55,11 +69,11 @@ fn drawSprite(sprite: *Sprite.Sprite, depth_buffer: []f32, fb: *Framebuffer, pla
 
     // screen sprite size
     var sprite_screen_size: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / sprite.player_dist);
-    if (sprite_screen_size > 1000) sprite_screen_size = 1000; // cap sprite size
+    if (sprite_screen_size > 1000) sprite_screen_size = 1000; // cap sprite size to 1000
     // the 3D view takes only a half of the framebuffer
     const fb_w2: f32 = @intToFloat(f32, fb.w) / 2;
-    const h_offset: isize = @floatToInt(isize, (sprite_dir - player.angle) / player.fov * fb_w2 + fb_w2 / 2 -
-        @intToFloat(f32, spritestex.size / 2));
+    const h_offset: isize = @floatToInt(isize, (sprite_dir - player.angle) * fb_w2 / player.fov + fb_w2 / 2 -
+        @intToFloat(f32, sprite_screen_size) / 2);
     const v_offset: isize = @intCast(isize, fb.h / 2) - @intCast(isize, sprite_screen_size / 2);
 
     var i: usize = 0;
@@ -102,28 +116,28 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sp
     const cell_w: usize = fb.w / (map.w * 2);
     const cell_h: usize = fb.h / map.h;
 
-    drawMap(fb, map, walltex, cell_w, cell_h);
-
     // draw the visibility cone && the 3D view
     const allocator = std.heap.c_allocator;
     var depth_buffer = try allocator.alloc(f32, fb.w / 2);
     defer allocator.free(depth_buffer);
+    std.mem.set(f32, depth_buffer, 1e3);
+
     i = 0;
-    while (i < fb.w / 2) : (i += 1) { // draw the visibility cone
+    while (i < fb.w / 2) : (i += 1) { // draw the visibility cone && 3D view
         const angle: f32 = player.getRayAngle(@intToFloat(f32, i), @intToFloat(f32, fb.w) / 2.0);
 
-        // ray marching loop
         var t: f32 = 0;
-        while (t < 20) : (t += 0.01) {
+        while (t < 20) : (t += 0.01) { // ray marching loop
             const x: f32 = player.x + t * @cos(angle);
             const y: f32 = player.y + t * @sin(angle);
-
             // this draws the visibility cone
-            fb.*.setPixel(
+            fb.setPixel(
                 @floatToInt(usize, x * @intToFloat(f32, cell_w)),
                 @floatToInt(usize, y * @intToFloat(f32, cell_h)),
-                utils.packColor(160, 160, 160),
+                utils.packColor(190, 190, 190),
             );
+
+            // proceed with the ray march if we don't hit anything
             if (map.isEmpty(@floatToInt(usize, x), @floatToInt(usize, y))) continue;
 
             // our ray touches a wall, so draw the vertical column to create an
@@ -132,8 +146,10 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sp
             const dist: f32 = t * @cos(angle - player.angle);
             depth_buffer[i] = dist;
 
-            if (dist == 0) continue;
-            const column_height: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / dist);
+            if (dist == 0) continue; // avoid division by 0 (inside walls)
+            var column_height: usize = @floatToInt(usize, @intToFloat(f32, fb.h) / dist);
+            // if (column_height > fb.h) column_height = fb.h; // cap column height to framebuffer height
+            if (column_height > 2000) column_height = 2000;
 
             // draw textured wall
             const column: []u32 = walltex.getScaledColumn(texid, wallXTexcoord(walltex, x, y), column_height);
@@ -152,29 +168,13 @@ fn render(fb: *Framebuffer, map: *Map.Map, player: *Player, sprites: []Sprite.Sp
         }
     }
 
-    // sort sprites
     i = 0;
     while (i < sprites.len) : (i += 1) {
         const sprite = &sprites[i];
-        // distance from the player to the sprite
-        sprite.player_dist = math.sqrt(math.pow(f32, player.x - sprite.x, 2) +
-            math.pow(f32, player.y - sprite.y, 2));
-    }
-    std.sort.sort(Sprite.Sprite, sprites, {}, Sprite.desc);
-
-    i = 0;
-    while (i < sprites.len) : (i += 1) {
-        const sprite = &sprites[i];
-        // show sprite on the map
-        fb.drawRectangle(
-            @floatToInt(usize, @round(sprite.x * @intToFloat(f32, cell_w) - 3)),
-            @floatToInt(usize, @round(sprite.y * @intToFloat(f32, cell_h) - 3)),
-            6,
-            6,
-            utils.packColor(255, 0, 0),
-        );
         drawSprite(sprite, depth_buffer, fb, player, monstertex);
     }
+
+    drawMap(fb, map, walltex, sprites, cell_w, cell_h);
 }
 
 const Args = struct {
@@ -192,6 +192,16 @@ fn renderLoop(args: Args) void {
     const fps = 60;
 
     while (!quit) {
+        // sort sprites
+        var i: usize = 0;
+        while (i < args.sprites.len) : (i += 1) {
+            const sprite = &args.sprites[i];
+            // distance from the player to the sprite
+            sprite.player_dist = math.sqrt(math.pow(f32, args.player.x - sprite.x, 2) +
+                math.pow(f32, args.player.y - sprite.y, 2));
+        }
+        std.sort.sort(Sprite.Sprite, args.sprites, {}, Sprite.desc);
+
         render(args.fb, args.map, args.player, args.sprites, args.walltex, args.monstertex) catch continue;
         _ = c.SDL_UpdateTexture(
             args.sdlTexture.?,
@@ -227,7 +237,9 @@ pub fn main() !u8 {
     try sprites.append(Sprite.Sprite{ .x = 3.523, .y = 3.812, .tex_id = 2 });
     try sprites.append(Sprite.Sprite{ .x = 1.834, .y = 8.765, .tex_id = 0 });
     try sprites.append(Sprite.Sprite{ .x = 5.323, .y = 5.365, .tex_id = 1 });
-    try sprites.append(Sprite.Sprite{ .x = 4.123, .y = 10.265, .tex_id = 1 });
+    try sprites.append(Sprite.Sprite{ .x = 14.32, .y = 13.36, .tex_id = 3 });
+    try sprites.append(Sprite.Sprite{ .x = 4.123, .y = 10.76, .tex_id = 1 });
+
     // read map
     var map = Map.readMap();
     defer map.destructor();
@@ -235,7 +247,7 @@ pub fn main() !u8 {
     var player = Player{
         .x = 3.456,
         .y = 2.345,
-        .angle = math.pi / 2.0,
+        .angle = 1.523, //math.pi / 2.0
         .fov = math.pi / 3.0,
     };
 

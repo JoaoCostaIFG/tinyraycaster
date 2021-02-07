@@ -23,6 +23,10 @@ pub const Framebuffer = struct {
     }
 
     pub fn setPixel(self: *Framebuffer, x: usize, y: usize, color: u32) void {
+        // don't attempt to draw outside the limits of the framebuffer
+        std.debug.assert(x < self.w);
+        std.debug.assert(y < self.h);
+
         self.buffer[y * self.w + x] = color;
     }
 
