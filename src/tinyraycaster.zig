@@ -189,7 +189,7 @@ const Args = struct {
 };
 
 fn renderLoop(args: Args) void {
-    const fps = 30;
+    const fps = 60;
 
     while (!quit) {
         render(args.fb, args.map, args.player, args.sprites, args.walltex, args.monstertex) catch continue;
@@ -255,7 +255,7 @@ pub fn main() !u8 {
     // _ = c.SDL_ShowCursor(c.SDL_DISABLE);
     // _ = SDL_SetRelativeMouseMode(c.SDL_TRUE);
 
-    // TODO c.SDL_RENDERER_PRESENTVSYNC makes input slow
+    // TODO c.SDL_RENDERER_PRESENTVSYNC makes input slow (needs confirm ?)
     var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC);
     var texture: ?*c.SDL_Texture =
         c.SDL_CreateTexture(
