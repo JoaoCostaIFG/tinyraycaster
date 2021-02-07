@@ -25,14 +25,14 @@ pub const Player = struct {
     }
 
     pub fn left(self: *Player) void {
-        self.x += @sin(self.angle) * self.speed;
-        self.y += @cos(self.angle) * self.speed;
+        self.x += @cos(math.pi / 2.0 - self.angle) * self.speed;
+        self.y -= @sin(math.pi / 2.0 - self.angle) * self.speed;
         self.normalizePos();
     }
 
     pub fn right(self: *Player) void {
-        self.x -= @sin(self.angle) * self.speed;
-        self.y -= @cos(self.angle) * self.speed;
+        self.x -= @cos(math.pi / 2.0 - self.angle) * self.speed;
+        self.y += @sin(math.pi / 2.0 - self.angle) * self.speed;
         self.normalizePos();
     }
 

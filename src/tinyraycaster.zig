@@ -32,7 +32,7 @@ var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
 var mouse = [_]i32{ 0, 0 }; // left, right
 
 fn movePlayer(player: *Player.Player) void {
-    // movement and camera
+    // player movement direction
     // TODO deltatime
     var move: i8 = @enumToInt(Player.Direction.stop);
     if (kbd[0]) move += @enumToInt(Player.Direction.front);
@@ -43,14 +43,18 @@ fn movePlayer(player: *Player.Player) void {
     player.move(@intToEnum(Player.Direction, move));
 }
 
+fn moveCamera(player: *Player.Player) void {
+    player.look(@divFloor(mouse[0], 10));
+    mouse[0] = 0;
+    mouse[1] = 0;
+}
+
 fn renderLoop(gs: GameState) void {
     const fps = 60;
 
     while (!quit) {
         movePlayer(gs.player);
-        std.debug.print("mouse move {} {}\n", .{ mouse[0], mouse[1] });
-        gs.player.look(@divFloor(mouse[0], 10));
-        mouse[0] = 0;
+        moveCamera(gs.player);
 
         // sort sprites
         var i: usize = 0;
