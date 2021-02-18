@@ -5,6 +5,10 @@ and computer graphics.
 
 [Here](https://github.com/ssloy/tinyraycaster/wiki) is the tutorial I followed.
 
+## Running
+
+`zig build run`
+
 ## Cool stuff used in this project
 
 [SDL2](https://www.libsdl.org/index.php)
