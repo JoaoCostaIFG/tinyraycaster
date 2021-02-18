@@ -51,10 +51,15 @@ fn moveCamera(player: *Player.Player) void {
 
 fn renderLoop(gs: GameState) void {
     const fps = 60;
-    const sleep_len = std.time.ns_per_s / fps;
+    const base_sleep_len = std.time.ns_per_s / fps;
+
+    var delta_time: u64 = 0;
+    var timer = std.time.Timer.start() catch unreachable;
 
     // TODO deltatime (use Timer)
     while (!quit) {
+        timer.reset(); // start counting frame rendering time
+
         movePlayer(gs.player);
         moveCamera(gs.player);
 
@@ -80,7 +85,8 @@ fn renderLoop(gs: GameState) void {
         _ = c.SDL_RenderCopy(gs.sdlRenderer.?, gs.sdlTexture.?, null, null);
         c.SDL_RenderPresent(gs.sdlRenderer.?);
 
-        std.time.sleep(sleep_len);
+        delta_time = timer.read();
+        if (base_sleep_len > delta_time) std.time.sleep(base_sleep_len - delta_time);
     }
 }
 
