@@ -31,7 +31,7 @@ var quit: bool = false;
 var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
 var mouse = [_]i32{ 0, 0 }; // left, right
 
-fn movePlayer(player: *Player.Player) void {
+fn movePlayer(player: *Player.Player, delta_time_perc: f32) void {
     // player movement direction
     var move: i8 = @enumToInt(Player.Direction.stop);
     if (kbd[0]) move += @enumToInt(Player.Direction.front);
@@ -39,12 +39,11 @@ fn movePlayer(player: *Player.Player) void {
     if (kbd[2]) move += @enumToInt(Player.Direction.left);
     if (kbd[3]) move += @enumToInt(Player.Direction.right);
 
-    player.move(@intToEnum(Player.Direction, move));
+    player.move(@intToEnum(Player.Direction, move), delta_time_perc);
 }
 
-fn moveCamera(player: *Player.Player) void {
-    // TODO deltatime (use Timer)
-    player.look(@divFloor(mouse[0], 10));
+fn moveCamera(player: *Player.Player, delta_time_perc: f32) void {
+    player.look(@intToFloat(f32, mouse[0]) / 10.0, delta_time_perc);
     mouse[0] = 0;
     mouse[1] = 0;
 }
@@ -59,8 +58,9 @@ fn renderLoop(gs: GameState) !void {
     while (!quit) {
         timer.reset(); // start counting frame rendering time
 
-        movePlayer(gs.player);
-        moveCamera(gs.player);
+        const delta_time_perc = @intToFloat(f32, delta_time) / @intToFloat(f32, base_sleep_len);
+        movePlayer(gs.player, delta_time_perc);
+        moveCamera(gs.player, delta_time_perc);
 
         // sort sprites
         var i: usize = 0;
@@ -85,7 +85,10 @@ fn renderLoop(gs: GameState) !void {
         c.SDL_RenderPresent(gs.sdlRenderer.?);
 
         delta_time = timer.read();
-        if (base_sleep_len > delta_time) std.time.sleep(base_sleep_len - delta_time);
+        if (base_sleep_len > delta_time) {
+            std.time.sleep(base_sleep_len - delta_time);
+            delta_time += base_sleep_len;
+        }
     }
 }
 

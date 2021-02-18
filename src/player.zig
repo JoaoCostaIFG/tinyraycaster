@@ -12,27 +12,27 @@ pub const Player = struct {
         return self.angle - self.fov / 2.0 + self.fov * i / win_w2;
     }
 
-    pub fn front(self: *Player) void {
-        self.x += @cos(self.angle) * self.speed;
-        self.y += @sin(self.angle) * self.speed;
+    pub fn front(self: *Player, speed: f32) void {
+        self.x += @cos(self.angle) * speed;
+        self.y += @sin(self.angle) * speed;
         self.normalizePos();
     }
 
-    pub fn back(self: *Player) void {
-        self.x -= @cos(self.angle) * self.speed;
-        self.y -= @sin(self.angle) * self.speed;
+    pub fn back(self: *Player, speed: f32) void {
+        self.x -= @cos(self.angle) * speed;
+        self.y -= @sin(self.angle) * speed;
         self.normalizePos();
     }
 
-    pub fn left(self: *Player) void {
-        self.x += @cos(math.pi / 2.0 - self.angle) * self.speed;
-        self.y -= @sin(math.pi / 2.0 - self.angle) * self.speed;
+    pub fn left(self: *Player, speed: f32) void {
+        self.x += @cos(math.pi / 2.0 - self.angle) * speed;
+        self.y -= @sin(math.pi / 2.0 - self.angle) * speed;
         self.normalizePos();
     }
 
-    pub fn right(self: *Player) void {
-        self.x -= @cos(math.pi / 2.0 - self.angle) * self.speed;
-        self.y += @sin(math.pi / 2.0 - self.angle) * self.speed;
+    pub fn right(self: *Player, speed: f32) void {
+        self.x -= @cos(math.pi / 2.0 - self.angle) * speed;
+        self.y += @sin(math.pi / 2.0 - self.angle) * speed;
         self.normalizePos();
     }
 
@@ -41,42 +41,43 @@ pub const Player = struct {
         if (self.y < 0) self.y = 0;
     }
 
-    pub fn look(self: *Player, amount: i32) void {
-        self.angle += self.a_speed * @intToFloat(f32, amount);
-    }
-
-    pub fn move(self: *Player, moveDirection: Direction) void {
+    pub fn move(self: *Player, moveDirection: Direction, delta_time_perc: f32) void {
+        const move_speed = self.speed * delta_time_perc;
         switch (moveDirection) {
             Direction.front => {
-                self.front();
+                self.front(move_speed);
             },
             Direction.back => {
-                self.back();
+                self.back(move_speed);
             },
             Direction.left => {
-                self.left();
+                self.left(move_speed);
             },
             Direction.right => {
-                self.right();
+                self.right(move_speed);
             },
             Direction.lfront => {
-                self.front();
-                self.left();
+                self.front(move_speed);
+                self.left(move_speed);
             },
             Direction.rfront => {
-                self.front();
-                self.right();
+                self.front(move_speed);
+                self.right(move_speed);
             },
             Direction.lback => {
-                self.back();
-                self.left();
+                self.back(move_speed);
+                self.left(move_speed);
             },
             Direction.rback => {
-                self.back();
-                self.right();
+                self.back(move_speed);
+                self.right(move_speed);
             },
             else => {},
         }
+    }
+
+    pub fn look(self: *Player, amount: f32, delta_time_perc: f32) void {
+        self.angle += self.a_speed * delta_time_perc * amount;
     }
 };
 
