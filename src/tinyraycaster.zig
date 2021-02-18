@@ -31,9 +31,8 @@ var quit: bool = false;
 var kbd = [_]bool{ false, false, false, false }; // front, back, left, right
 var mouse = [_]i32{ 0, 0 }; // left, right
 
-fn movePlayer(player: *Player.Player) void {
+fn movePlayer(player: *Player.Player, delta_time: u64) void {
     // player movement direction
-    // TODO deltatime (use timer)
     var move: i8 = @enumToInt(Player.Direction.stop);
     if (kbd[0]) move += @enumToInt(Player.Direction.front);
     if (kbd[1]) move += @enumToInt(Player.Direction.back);
@@ -44,6 +43,7 @@ fn movePlayer(player: *Player.Player) void {
 }
 
 fn moveCamera(player: *Player.Player) void {
+    // TODO deltatime (use Timer)
     player.look(@divFloor(mouse[0], 10));
     mouse[0] = 0;
     mouse[1] = 0;
@@ -56,7 +56,7 @@ fn renderLoop(gs: GameState) void {
     var delta_time: u64 = 0;
     var timer = std.time.Timer.start() catch unreachable;
 
-    // TODO deltatime (use Timer)
+    const a = @divExact(2, 3);
     while (!quit) {
         timer.reset(); // start counting frame rendering time
 
