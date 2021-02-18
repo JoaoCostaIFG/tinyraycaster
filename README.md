@@ -1,7 +1,17 @@
-https://github.com/ssloy/tinyraycaster/wiki
-https://github.com/nothings/stb
+# Tinyraycaster
 
-# TODO
+I wrote this to learn the Zig programming language and play around with SDL2
+and computer graphics.
+
+[Here](https://github.com/ssloy/tinyraycaster/wiki) is the tutorial I followed.
+
+## Cool stuff used in this project
+
+[SDL2](https://www.libsdl.org/index.php)
+[stb_image](https://github.com/nothings/stb)
+[Zig](https://ziglang.org/)
+
+## TODO
 
 - use c allocator for performance reasons ?
 - @round in place of @floatToInt,
@@ -11,3 +21,4 @@ https://github.com/nothings/stb
 - mapa sem paredes => olhar para o infinito
 - Error unions on obj creation functions + errdefer for cleanup on error
 - use SDL for print screens
+- Map for input

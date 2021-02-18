@@ -33,7 +33,7 @@ var mouse = [_]i32{ 0, 0 }; // left, right
 
 fn movePlayer(player: *Player.Player) void {
     // player movement direction
-    // TODO deltatime
+    // TODO deltatime (use timer)
     var move: i8 = @enumToInt(Player.Direction.stop);
     if (kbd[0]) move += @enumToInt(Player.Direction.front);
     if (kbd[1]) move += @enumToInt(Player.Direction.back);
@@ -51,7 +51,9 @@ fn moveCamera(player: *Player.Player) void {
 
 fn renderLoop(gs: GameState) void {
     const fps = 60;
+    const sleep_len = std.time.ns_per_s / fps;
 
+    // TODO deltatime (use Timer)
     while (!quit) {
         movePlayer(gs.player);
         moveCamera(gs.player);
@@ -78,7 +80,7 @@ fn renderLoop(gs: GameState) void {
         _ = c.SDL_RenderCopy(gs.sdlRenderer.?, gs.sdlTexture.?, null, null);
         c.SDL_RenderPresent(gs.sdlRenderer.?);
 
-        std.time.sleep(std.time.ns_per_s / fps);
+        std.time.sleep(sleep_len);
     }
 }
 
