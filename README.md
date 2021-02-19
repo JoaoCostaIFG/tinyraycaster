@@ -5,15 +5,22 @@ and computer graphics.
 
 [Here](https://github.com/ssloy/tinyraycaster/wiki) is the tutorial I followed.
 
-## Running
+![Game screenshot](/screenshot.png)
+
+## Build && Run
 
 `zig build run`
 
+### Controls
+
+- W, A, S, D for moving.
+- Mouse for camera movement.
+
 ## Cool stuff used in this project
 
-[SDL2](https://www.libsdl.org/index.php)
-[stb_image](https://github.com/nothings/stb)
-[Zig](https://ziglang.org/)
+- [SDL2](https://www.libsdl.org/index.php)
+- [stb_image](https://github.com/nothings/stb)
+- [Zig](https://ziglang.org/)
 
 ## TODO
 
