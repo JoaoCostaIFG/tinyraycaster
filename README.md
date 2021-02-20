@@ -15,6 +15,7 @@ and computer graphics.
 
 - W, A, S, D for moving.
 - Mouse for camera movement.
+- PrtSc for screenshots.
 
 ## Cool stuff used in this project
 
