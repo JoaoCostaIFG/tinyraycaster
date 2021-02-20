@@ -19,7 +19,7 @@ and computer graphics.
 ## Cool stuff used in this project
 
 - [SDL2](https://www.libsdl.org/index.php)
-- [stb_image](https://github.com/nothings/stb)
+- [stb_image](https://github.com/nothings/stb) - not in use anymore
 - [Zig](https://ziglang.org/)
 
 ## TODO
