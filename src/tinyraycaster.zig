@@ -92,7 +92,7 @@ fn renderLoop(gs: GameState) !void {
     }
 }
 
-pub fn main() !u8 {
+pub fn main() !void {
     // the image itself
     var framebuffer = Framebuffer{
         .w = 1024,
@@ -101,6 +101,11 @@ pub fn main() !u8 {
     try framebuffer.init();
     defer framebuffer.destructor();
     // load textures
+    const img_flags: c_int = c.IMG_INIT_PNG;
+    if (c.IMG_Init(img_flags) & img_flags == 0) {
+        log.err("SDL2_image init failed.", .{});
+        return;
+    }
     var walltex = Texture.loadTexture("assets/walltext.png");
     defer walltex.destructor();
     var monstertex = Texture.loadTexture("assets/monsters.png");
@@ -126,7 +131,10 @@ pub fn main() !u8 {
     };
 
     // SDL2
-    _ = c.SDL_Init(c.SDL_INIT_VIDEO);
+    if (c.SDL_Init(c.SDL_INIT_VIDEO) != 0) {
+        log.err("SDL2 init failed.", .{});
+        return;
+    }
     defer c.SDL_Quit();
     var window: ?*c.SDL_Window =
         c.SDL_CreateWindow(
@@ -226,6 +234,4 @@ pub fn main() !u8 {
     c.SDL_DestroyTexture(texture.?);
     c.SDL_DestroyRenderer(renderer.?);
     c.SDL_DestroyWindow(window.?);
-
-    return 0;
 }

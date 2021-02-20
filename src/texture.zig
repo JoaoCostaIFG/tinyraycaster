@@ -37,52 +37,44 @@ pub const Texture = struct {
 };
 
 // TODO optional pointer?
+// TODO error union
 pub fn loadTexture(filename: [*:0]const u8) Texture {
-    var nchannels: c_int = -1;
-    var w: c_int = undefined;
-    var h: c_int = undefined;
-    const pixmap: ?[*]u8 = c.stbi_load(filename, &w, &h, &nchannels, 0);
-    if (pixmap == null) {
-        log.err("loadTexture: can't load the texture ({s}).", .{filename});
-        // return false;
-    }
-    defer c.stbi_image_free(pixmap.?);
+    const surf: *c.SDL_Surface = c.IMG_Load(filename);
+    const w: usize = @intCast(usize, surf.w);
+    const h: usize = @intCast(usize, surf.h);
 
-    if (4 != nchannels) {
-        log.err("loadTexture: the texture must be a 32 bit image ({s}).", .{filename});
-        // return false;
-    }
-
-    const tex_cnt: usize = @intCast(usize, @divTrunc(w, h));
-    const tex_size: usize = @intCast(usize, w) / tex_cnt;
-    if (w != @intCast(usize, h) * tex_cnt) {
+    const tex_cnt: usize = w / h;
+    const tex_size: usize = w / tex_cnt;
+    if (w != h * tex_cnt) {
         log.err("loadTexture: the texture file must contain N square textures packed horizontally ({s}).", .{filename});
         // return false;
     }
 
     // read the texture data
     const allocator = std.heap.c_allocator;
-    var texture = allocator.alloc(u32, @intCast(usize, h * w)) catch {
+    var texture = allocator.alloc(u32, h * w) catch {
         log.err("loadTexture: texture memory allocation failed ({s}).", .{filename});
         return Texture{ .w = 0, .h = 0, .size = 0, .cnt = 0 };
     };
+
+    const pixmap: [*]u8 = @ptrCast([*]u8, surf.pixels);
     var i: usize = 0;
     while (i < h) : (i += 1) {
         var j: usize = 0;
         while (j < w) : (j += 1) {
-            const ind: usize = i * @intCast(usize, w) + j;
+            const ind: usize = i * w + j;
             texture[ind] = utils.packColorA(
-                pixmap.?[ind * 4],
-                pixmap.?[ind * 4 + 1],
-                pixmap.?[ind * 4 + 2],
-                pixmap.?[ind * 4 + 3],
+                pixmap[ind * 4],
+                pixmap[ind * 4 + 1],
+                pixmap[ind * 4 + 2],
+                pixmap[ind * 4 + 3],
             );
         }
     }
 
     return Texture{
-        .w = @intCast(usize, w),
-        .h = @intCast(usize, h),
+        .w = w,
+        .h = h,
         .size = tex_size,
         .cnt = tex_cnt,
         .tex = texture,
