@@ -150,10 +150,11 @@ pub fn main() !void {
 
     // TODO c.SDL_RENDERER_PRESENTVSYNC makes input slow (needs confirm ?)
     var renderer: ?*c.SDL_Renderer = c.SDL_CreateRenderer(window.?, -1, c.SDL_RENDERER_ACCELERATED | c.SDL_RENDERER_PRESENTVSYNC);
+    const pixel_format = c.SDL_PIXELFORMAT_ABGR8888;
     var texture: ?*c.SDL_Texture =
         c.SDL_CreateTexture(
         renderer.?,
-        c.SDL_PIXELFORMAT_ABGR8888,
+        pixel_format,
         c.SDL_TEXTUREACCESS_STREAMING,
         @intCast(c_int, framebuffer.w),
         @intCast(c_int, framebuffer.h),
@@ -191,8 +192,18 @@ pub fn main() !void {
                     c.SDLK_PRINTSCREEN => {
                         log.info("Print screen.", .{});
                         // output resulting image
-                        if (!framebuffer.dropPpmImage("out.ppm"))
-                            log.err("dropPpmImage: Saving the image to a file failed!", .{});
+                        // if (!framebuffer.dropPpmImage("out.ppm"))
+                        // log.err("dropPpmImage: Saving the image to a file failed!", .{});
+                        var surf: *c.SDL_Surface = c.SDL_CreateRGBSurfaceWithFormat(
+                            0,
+                            @intCast(c_int, framebuffer.w),
+                            @intCast(c_int, framebuffer.h),
+                            32,
+                            pixel_format,
+                        );
+                        _ = c.SDL_RenderReadPixels(renderer, null, pixel_format, surf.pixels, surf.pitch);
+                        _ = c.SDL_SaveBMP(surf, "screenshot.bmp");
+                        _ = c.SDL_FreeSurface(surf);
                     },
                     c.SDLK_q, c.SDLK_ESCAPE => {
                         quit = true;
